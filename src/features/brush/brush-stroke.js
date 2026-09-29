@@ -742,12 +742,27 @@ function applyPaintStamp(stroke, brushDescriptor, stampResult, opacity) {
 function applyPencilStamp(stroke, stampResult, stampCenter, opacity) {
   const smearDx = Math.round(stampCenter.x - stroke.lastSmearPt.x);
   const smearDy = Math.round(stampCenter.y - stroke.lastSmearPt.y);
-  const shiftedRect = stampResult.rect.clone();
-  shiftedRect.offset(-smearDx, -smearDy);
-  const clipRect = shiftedRect.intersect(stroke.rect);
-  clipRect.offset(smearDx, smearDy);
-  copyPixels(stroke.pixelBuffer, stroke.rect, stampResult.rgbaBuffer, clipRect);
-  compositeNormalDitheredClipped(stampResult.rgbaBuffer, stampResult.rect, stroke.pixelBuffer, stroke.rect, stampResult.alphaChannel, stampResult.rect, opacity)
+  // Interpret the existing pixels at the new stamp position so each pixel
+  // samples the previous position along the drag, then blend through the tip.
+  const shiftedSourceRect = stroke.rect.clone();
+  shiftedSourceRect.offset(smearDx, smearDy);
+  copyPixels(stroke.pixelBuffer, shiftedSourceRect, stampResult.rgbaBuffer, stampResult.rect);
+  let alphaChannel = stampResult.alphaChannel;
+  if (!shiftedSourceRect.containsRect(stampResult.rect)) {
+    // A stamp can straddle the canvas edge. Pixels without a source sample
+    // must not blend the zero-filled stamp buffer into the artwork.
+    alphaChannel = alphaChannel.slice();
+    const valid = shiftedSourceRect.intersect(stampResult.rect);
+    for (let y = 0; y < stampResult.rect.height; y++) {
+      for (let x = 0; x < stampResult.rect.width; x++) {
+        const docX = stampResult.rect.x + x, docY = stampResult.rect.y + y;
+        if (docX < valid.x || docX >= valid.x + valid.width || docY < valid.y || docY >= valid.y + valid.height) {
+          alphaChannel[y * stampResult.rect.width + x] = 0;
+        }
+      }
+    }
+  }
+  compositeNormalDitheredClipped(stampResult.rgbaBuffer, stampResult.rect, stroke.pixelBuffer, stroke.rect, alphaChannel, stampResult.rect, opacity)
 }
 
 function applyRetouchStamp(stroke, brushMode, stampResult, opacity) {

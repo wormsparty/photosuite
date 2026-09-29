@@ -122,4 +122,51 @@ describe("features/brush/brush-stroke.js", () => {
       ["0", "1", "2", "3"],
     );
   });
+
+  it("pencil retouch mode smears contrasting source pixels along a drag", () => {
+    const width = 32, height = 32;
+    const source = new Uint8Array(width * height * 4);
+    for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * 4;
+      source[i] = x < 12 ? 20 : 220;
+      source[i + 1] = source[i];
+      source[i + 2] = source[i];
+      source[i + 3] = 255;
+    }
+    const brush = BrushPresetUtil.getDefaultBrushDescriptor();
+    brush.Brsh.v.diameter.v.val = 7;
+    const stroke = new BrushStroke(brush, [], null,
+      { opacity: 1, brushMode: BrushStroke.MODE_PENCIL, pressureDynamics: [false, false] },
+      0, 0, new Rect(0, 0, width, height), source.slice());
+    stroke.moveTo(8, 16, 1);
+    stroke.lineTo(13, 16, 1);
+    stroke.lineTo(20, 16, 1);
+    stroke.finish();
+    const result = stroke.getBuffer();
+    assert.notDeepEqual(result, source, "drag must alter the source pixels");
+    assert.notEqual(result[(16 * width + 14) * 4], source[(16 * width + 14) * 4],
+      "dark pixels should smear across the light boundary");
+
+    const edgeSource = new Uint8Array(width * height * 4);
+    for (let i = 0; i < edgeSource.length; i += 4) {
+      edgeSource[i] = 70;
+      edgeSource[i + 1] = 90;
+      edgeSource[i + 2] = 110;
+      edgeSource[i + 3] = 255;
+    }
+    const edgeStroke = new BrushStroke(brush, [], null,
+      { opacity: 1, brushMode: BrushStroke.MODE_PENCIL, pressureDynamics: [false, false] },
+      0, 0, new Rect(0, 0, width, height), edgeSource.slice());
+    edgeStroke.moveTo(1, 16, 1);
+    edgeStroke.lineTo(4, 16, 1);
+    edgeStroke.lineTo(8, 16, 1);
+    edgeStroke.finish();
+    const edgeResult = edgeStroke.getBuffer();
+    for (let y = 8; y < 24; y++) for (let x = 0; x < 12; x++) {
+      const i = (y * width + x) * 4;
+      assert.ok(edgeResult[i] >= 60,
+        `pixel ${x},${y} must not darken from an out-of-bounds sample`);
+      assert.equal(edgeResult[i + 3], 255, `pixel ${x},${y} must stay opaque`);
+    }
+  });
 });
