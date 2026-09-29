@@ -166,11 +166,10 @@ export function fillBufferRect(buffer, bounds, fillRect, value, mask) {
 }
 
 export function copyBuffer(src, dst) {
-  const byteLength = Math.min(src.buffer.byteLength, dst.buffer.byteLength);
-  const wordCount = byteLength >>> 2;
-  const srcWords = new Uint32Array(src.buffer, 0, wordCount);
-  const dstWords = new Uint32Array(dst.buffer, 0, wordCount);
-  dstWords.set(srcWords);
+  const byteLength = Math.min(src.byteLength, dst.byteLength);
+  const srcBytes = new Uint8Array(src.buffer, src.byteOffset, byteLength);
+  const dstBytes = new Uint8Array(dst.buffer, dst.byteOffset, byteLength);
+  dstBytes.set(srcBytes);
 }
 
 export function equals(a, b) {
