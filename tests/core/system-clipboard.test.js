@@ -17,6 +17,7 @@ let CLIPBOARD_SIGNATURE_PENDING;
 let applyDataTransferToController;
 let writeClipboardRgba;
 let readSystemClipboardForPaste;
+let readClipboardImageSignature;
 
 before(async () => {
   ({
@@ -26,6 +27,7 @@ before(async () => {
     applyDataTransferToController,
     writeClipboardRgba,
     readSystemClipboardForPaste,
+    readClipboardImageSignature,
   } = await import(
     "../../src/core/system-clipboard.js"
   ));
@@ -176,6 +178,61 @@ describe("core/system-clipboard.js", () => {
     try {
       assert.equal(await readSystemClipboardForPaste(controller, controller.applyClipboardImage, null), true);
       assert.deepEqual(received, ["https://example.invalid/image"]);
+    } finally {
+      delete window.__TAURI__;
+    }
+  });
+
+  it("distinguishes external and unchanged clipboard images with equal dimensions", async () => {
+    const imported = [];
+    const copiedPixels = [255, 0, 0, 255, 0, 0, 255, 255];
+    const externalPixels = [0, 255, 0, 255, 255, 255, 0, 255];
+    let currentPixels = copiedPixels;
+    window.__TAURI__ = { clipboardManager: {
+      readImage: async () => ({
+        rgba: async () => currentPixels,
+        size: async () => ({ width: 2, height: 1 }),
+      }),
+      readText: async () => "",
+    } };
+    const controller = {
+      applyClipboardImage(pixels, rect) {
+        imported.push({ pixels: [...pixels], rect: [rect.width, rect.height] });
+      },
+    };
+    try {
+      const baseline = await readClipboardImageSignature();
+      assert.equal(await readSystemClipboardForPaste(
+        controller,
+        controller.applyClipboardImage.bind(controller),
+        null,
+        baseline,
+      ), false, "unchanged OS image should fall back to the in-app clipboard");
+      assert.deepEqual(imported, []);
+      currentPixels = externalPixels;
+      assert.equal(await readSystemClipboardForPaste(
+        controller,
+        controller.applyClipboardImage.bind(controller),
+        null,
+        baseline,
+      ), true);
+      assert.deepEqual(imported, [{ pixels: externalPixels, rect: [2, 1] }]);
+    } finally {
+      delete window.__TAURI__;
+    }
+  });
+
+  it("does not read pixel bytes while fingerprinting oversized clipboard metadata", async () => {
+    let rgbaCalls = 0;
+    window.__TAURI__ = { clipboardManager: {
+      readImage: async () => ({
+        size: async () => ({ width: 1025, height: 1025 }),
+        rgba: async () => { rgbaCalls++; throw new Error("oversized clipboard pixels requested"); },
+      }),
+    } };
+    try {
+      assert.equal(await readClipboardImageSignature(), "1025x1025");
+      assert.equal(rgbaCalls, 0);
     } finally {
       delete window.__TAURI__;
     }

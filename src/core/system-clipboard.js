@@ -26,10 +26,22 @@ const OS_CLIPBOARD_WRITE_MAX_PIXELS = 1024 * 1024;
  */
 export const CLIPBOARD_SIGNATURE_PENDING = "pending";
 
-/** Size-only signature of a clipboard image ({ width, height }), for freshness comparison. */
+/** Dimensions and, when available, pixel content of a clipboard image. */
 export function clipboardImageSignature(frame) {
   if (!frame || !frame.width || !frame.height) return "none";
-  return frame.width + "x" + frame.height;
+  const dimensions = frame.width + "x" + frame.height;
+  const rgba = frame.rgba;
+  if (!rgba || rgba.length !== frame.width * frame.height * 4) return dimensions;
+
+  // Two independent 32-bit accumulators keep the signature small even for a
+  // large clipboard frame. Dimensions alone confuse different same-size images.
+  let first = 2166136261;
+  let second = 0x9e3779b9;
+  for (let i = 0; i < rgba.length; i++) {
+    first = Math.imul(first ^ rgba[i], 16777619);
+    second = Math.imul(second ^ rgba[i], 0x5bd1e995);
+  }
+  return dimensions + ":" + (first >>> 0).toString(16) + ":" + (second >>> 0).toString(16);
 }
 
 /**
@@ -146,30 +158,25 @@ export function readClipboardRgba() {
 }
 
 /**
- * Reads a size-only signature of the current OS pasteboard image without
- * pulling pixel data. Resolves to "WxH", or "none" when no image is present or
- * the read fails.
+ * Reads the current OS pasteboard image and fingerprints its pixels. This must
+ * use the same data as paste so different images with equal dimensions are not
+ * mistaken for the preceding in-app copy.
  * @returns {Promise<string>}
  */
 export function readClipboardImageSignature() {
   const clipboard = getTauriClipboardManager();
-  if (!clipboard || typeof clipboard.readImage !== "function") {
-    return Promise.resolve("none");
-  }
-  return clipboard
-    .readImage()
-    .then((image) => {
-      if (!image) return "none";
-      if (typeof image.size === "function") {
-        const size = image.size();
-        if (size && typeof size.then === "function") {
-          return size.then((dims) => clipboardImageSignature(dims));
-        }
-        return clipboardImageSignature(size);
-      }
-      return clipboardImageSignature(image);
-    })
-    .catch(() => "none");
+  if (!clipboard || typeof clipboard.readImage !== "function") return Promise.resolve("none");
+  return clipboard.readImage().then(async (image) => {
+    if (!image) return "none";
+    const size = typeof image.size === "function" ? await image.size() : image;
+    const dimensions = clipboardImageSignature(size);
+    if (dimensions === "none") return dimensions;
+    // Baseline probing must not pull an arbitrary large OS image into JS.
+    if (size.width * size.height > OS_CLIPBOARD_WRITE_MAX_PIXELS || typeof image.rgba !== "function") {
+      return dimensions;
+    }
+    return clipboardImageSignature({ width: size.width, height: size.height, rgba: await image.rgba() });
+  }).catch(() => "none");
 }
 
 function encodeRgbaToPngBytes(rgba, width, height) {
