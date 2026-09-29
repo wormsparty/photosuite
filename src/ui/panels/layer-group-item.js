@@ -565,13 +565,9 @@ LayerGroupItem.prototype.onRowClick = function(clickEvent) {
     layerIndex = this.sectionNode.index,
     layer = doc.layers[layerIndex];
   if (clickTarget == this.visibilityEyeEl) {
+    // The visibility slot handles mousedown and drag-over. Its subsequent
+    // bubbling click must not toggle a second time or add a second history step.
     cancel(clickEvent);
-    const willShow = !layer.isVisible();
-    this.applyEvent({
-      actionKind: Layer.toggleVisibility,
-      layerIndex: layerIndex
-    });
-    this.visibilityEyeEl.style.opacity = willShow ? 1 : 0.25;
     return
   }
   if (clickTarget == this.lockIconEl) {
