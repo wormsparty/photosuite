@@ -761,7 +761,6 @@ function createInitialAppData() {
     startupResourceStore: {
       storedFiles: {}
     },
-    lastClipboardImageFileSize: 0,
     clipboardCopyRect: null,
     clipboardPixelPayload: null,
     auxiliaryClipboardValue: null,

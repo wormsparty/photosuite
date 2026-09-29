@@ -299,11 +299,11 @@ export function applyDataTransferToController(
     if (!imageHandled && item.type.indexOf("image") !== -1) {
       const file = item.getAsFile();
       if (file && controller.appData) {
-        if (file.size === controller.appData.lastClipboardImageFileSize) continue;
-        controller.appData.lastClipboardImageFileSize = file.size;
-        file.name = "image.png";
         if (controller.fileLoader) {
-          controller.fileLoader.loadLocalFiles([file], imageCallback);
+          // File.name is read-only in browsers. Clipboard images commonly have
+          // a name already; give unnamed blobs one for the file loader.
+          const importFile = file.name ? file : new File([file], "image.png", { type: file.type || "image/png" });
+          controller.fileLoader.loadLocalFiles([importFile], imageCallback);
           imageHandled = true;
           handled = true;
         }

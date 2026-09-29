@@ -14,9 +14,19 @@ const clipboardPath = path.join(repoRoot, "src/core/system-clipboard.js");
 let clipboardImageSignature;
 let isStaleClipboardFrame;
 let CLIPBOARD_SIGNATURE_PENDING;
+let applyDataTransferToController;
+let writeClipboardRgba;
+let readSystemClipboardForPaste;
 
 before(async () => {
-  ({ clipboardImageSignature, isStaleClipboardFrame, CLIPBOARD_SIGNATURE_PENDING } = await import(
+  ({
+    clipboardImageSignature,
+    isStaleClipboardFrame,
+    CLIPBOARD_SIGNATURE_PENDING,
+    applyDataTransferToController,
+    writeClipboardRgba,
+    readSystemClipboardForPaste,
+  } = await import(
     "../../src/core/system-clipboard.js"
   ));
 });
@@ -84,5 +94,90 @@ describe("core/system-clipboard.js", () => {
     it("pasteboard changed since copy (another app copied) → not stale, import it", () => {
       assert.equal(isStaleClipboardFrame(external, "512x512"), false);
     });
+  });
+
+  it("loads a newly copied image even when its file size matches the previous image", () => {
+    const loaded = [];
+    const controller = {
+      appData: { lastClipboardImageFileSize: 0 },
+      fileLoader: { loadLocalFiles(files) { loaded.push(files[0]); } },
+    };
+    const transfer = (file) => ({ items: [{ type: "image/png", getAsFile: () => file }] });
+    const first = { name: "first.png", size: 8, pixels: [255, 0] };
+    const second = { name: "second.png", size: 8, pixels: [0, 255] };
+
+    assert.equal(applyDataTransferToController(controller, transfer(first)), true);
+    assert.equal(applyDataTransferToController(controller, transfer(second)), true);
+    assert.deepEqual(loaded, [first, second]);
+  });
+
+  it("loads a native File clipboard image whose name is read-only", async () => {
+    const image = new File([new Uint8Array([1, 2, 3, 4])], "pasted.png", { type: "image/png" });
+    const loaded = [];
+    const controller = {
+      appData: {},
+      fileLoader: { loadLocalFiles(files) { loaded.push(files[0]); } },
+    };
+    const transfer = { items: [{ type: "image/png", getAsFile: () => image }] };
+
+    assert.equal(applyDataTransferToController(controller, transfer), true);
+    assert.equal(loaded.length, 1);
+    assert.equal(loaded[0].name, "pasted.png");
+    assert.deepEqual(new Uint8Array(await loaded[0].arrayBuffer()), new Uint8Array([1, 2, 3, 4]));
+  });
+
+  it("gives an unnamed clipboard File a filename for the image loader", async () => {
+    const image = new File([new Uint8Array([5, 6, 7, 8])], "", { type: "image/png" });
+    const loaded = [];
+    const controller = {
+      appData: {},
+      fileLoader: { loadLocalFiles(files) { loaded.push(files[0]); } },
+    };
+    const transfer = { items: [{ type: "image/png", getAsFile: () => image }] };
+
+    assert.equal(applyDataTransferToController(controller, transfer), true);
+    assert.equal(loaded.length, 1);
+    assert.equal(loaded[0].name, "image.png");
+    assert.deepEqual(new Uint8Array(await loaded[0].arrayBuffer()), new Uint8Array([5, 6, 7, 8]));
+  });
+
+  it("passes a small RGBA image to the native clipboard with exact bytes", async () => {
+    const calls = [];
+    window.__TAURI__ = { core: { invoke: async (command, payload) => calls.push({ command, payload }) } };
+    try {
+      await writeClipboardRgba(new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8]), 2, 1);
+      assert.deepEqual(calls, [{
+        command: "plugin:clipboard-manager|write_image",
+        payload: { image: { rgba: [1, 2, 3, 4, 5, 6, 7, 8], width: 2, height: 1 } },
+      }]);
+    } finally {
+      delete window.__TAURI__;
+    }
+  });
+
+  it("rejects an oversized clipboard write before serializing pixels", async () => {
+    const calls = [];
+    window.__TAURI__ = { core: { invoke: async (...args) => calls.push(args) } };
+    try {
+      await writeClipboardRgba(new Uint8Array([1, 2, 3, 4]), 1025, 1025);
+      assert.deepEqual(calls, []);
+    } finally {
+      delete window.__TAURI__;
+    }
+  });
+
+  it("falls back to clipboard text when an OS image has malformed byte length", async () => {
+    const received = [];
+    window.__TAURI__ = { clipboardManager: {
+      readImage: async () => ({ rgba: async () => [1, 2, 3], size: async () => ({ width: 1, height: 1 }) }),
+      readText: async () => "https://example.invalid/image",
+    } };
+    const controller = { onClipboardTextUrl: (value) => received.push(value), applyClipboardImage: () => received.push("image") };
+    try {
+      assert.equal(await readSystemClipboardForPaste(controller, controller.applyClipboardImage, null), true);
+      assert.deepEqual(received, ["https://example.invalid/image"]);
+    } finally {
+      delete window.__TAURI__;
+    }
   });
 });
