@@ -41,6 +41,7 @@ export const CROSSHAIR_INSET_RATIO = 0.12;
 
 /** Brush-mask value for an unmarked pixel: neither foreground nor background. */
 const UNMARKED = 128;
+const pendingAnalyses = new WeakMap();
 
 /**
  * Rebuild the shared quick-select session when the target layer changes.
@@ -49,8 +50,16 @@ const UNMARKED = 128;
  */
 export function syncQuickSelectOverlay(doc, sessionState, dispatcher, analyseNow) {
   if (!doc || doc.selectedLayerIndices.length == 0) return;
-  if (sessionState.key == getLayerFingerprint(doc)) return;
-  sessionState.key = getLayerFingerprint(doc);
+  const requestedKey = getLayerFingerprint(doc);
+  let pending = pendingAnalyses.get(sessionState);
+  if (pending && (analyseNow || pending.key !== requestedKey)) {
+    clearTimeout(pending.timer);
+    pending.hideBanner();
+    pendingAnalyses.delete(sessionState);
+    pending = null;
+  }
+  if (sessionState.key == requestedKey) return;
+  if (pending) return;
   const layerPixelCount = doc.layers[doc.selectedLayerIndices[0]].rect.area();
   if (layerPixelCount == 0) return;
   const loadingLabel = "Image Analysis ...";
@@ -63,20 +72,37 @@ export function syncQuickSelectOverlay(doc, sessionState, dispatcher, analyseNow
     };
     dispatcher.dispatch(loadingEvent);
   }
+  const request = {
+    key: requestedKey,
+    timer: null,
+    hideBanner() {
+      if (showLoadingBanner) {
+        const hideLoadingEvent = new AppEvent(EventType.uiDispatch, true);
+        hideLoadingEvent.data = {
+          dispatchKind: UiCommand.hideAnalysisLoadingBanner,
+          bannerLabel: loadingLabel,
+        };
+        dispatcher.dispatch(hideLoadingEvent);
+      }
+    },
+  };
+  pendingAnalyses.set(sessionState, request);
   const analyse = function() {
-    const analysedSession = createQuickSelectSession(doc);
-    for (const sessionKey in analysedSession) sessionState[sessionKey] = analysedSession[sessionKey];
-    if (showLoadingBanner) {
-      const hideLoadingEvent = new AppEvent(EventType.uiDispatch, true);
-      hideLoadingEvent.data = {
-        dispatchKind: UiCommand.hideAnalysisLoadingBanner,
-        bannerLabel: loadingLabel,
-      };
-      dispatcher.dispatch(hideLoadingEvent);
+    // A stroke may have completed this analysis synchronously, or another
+    // document may have superseded the hover that scheduled this callback.
+    if (pendingAnalyses.get(sessionState) !== request) return;
+    try {
+      if (!doc.selectedLayerIndices.length || getLayerFingerprint(doc) !== requestedKey) return;
+      const analysedSession = createQuickSelectSession(doc);
+      // Publish the key with the completed buffers, never with pending work.
+      for (const sessionKey in analysedSession) sessionState[sessionKey] = analysedSession[sessionKey];
+    } finally {
+      pendingAnalyses.delete(sessionState);
+      request.hideBanner();
     }
   };
   if (analyseNow) analyse();
-  else setTimeout(analyse, 30);
+  else request.timer = setTimeout(analyse, 30);
 }
 
 export function getLayerFingerprint(doc) {
