@@ -299,6 +299,9 @@ PrintDialog.prototype.selectedPrinter = function () {
  */
 PrintDialog.prototype.onPrinterChange = function () {
   const printer = this.selectedPrinter();
+  const previousDuplex = this.duplexKeys[this.duplexDropdown.getValue()];
+  const previousColor = this.colorKeys[this.colorDropdown.getValue()];
+  const previousQuality = this.qualityKeys[this.qualityDropdown.getValue()];
 
   const offered = printer && printer.papers.length > 0 ? printer.papers : STANDARD_PAPERS;
   this.papers = labelAndSortPapers(offered);
@@ -312,15 +315,16 @@ PrintDialog.prototype.onPrinterChange = function () {
 
   this.duplexKeys = printer && printer.duplexModes.length > 0 ? printer.duplexModes : ["none"];
   this.duplexDropdown.setItems(this.duplexKeys.map((key) => DUPLEX_LABELS[key] || key));
-  this.duplexDropdown.setValue(0);
+  this.duplexDropdown.setValue(Math.max(0, this.duplexKeys.indexOf(previousDuplex)));
 
   this.colorKeys = printer && printer.colorModes.length > 0 ? printer.colorModes : ["color"];
   this.colorDropdown.setItems(this.colorKeys.map((key) => COLOR_LABELS[key] || key));
-  this.colorDropdown.setValue(0);
+  this.colorDropdown.setValue(Math.max(0, this.colorKeys.indexOf(previousColor)));
 
   this.qualityKeys = printer && printer.qualities.length > 0 ? printer.qualities : ["normal"];
   this.qualityDropdown.setItems(this.qualityKeys.map((key) => QUALITY_LABELS[key] || key));
-  this.qualityDropdown.setValue(Math.max(0, this.qualityKeys.indexOf("normal")));
+  const qualityIndex = this.qualityKeys.indexOf(previousQuality);
+  this.qualityDropdown.setValue(qualityIndex < 0 ? Math.max(0, this.qualityKeys.indexOf("normal")) : qualityIndex);
 
   this.refresh();
 };
