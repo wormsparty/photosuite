@@ -235,6 +235,7 @@ function PropertiesPanel() {
   BaseTool.call(this, "panels.properties", false, getIconUrl("panels/properties"), BaseTool.PanelId.PROPERTIES, true);
   this.previewDoc = null;
   this.doc = null;
+  this.appData = null;
   this.lastLayerIndex = -1
 }
 PropertiesPanel.prototype = Object.create(BaseTool.prototype);
@@ -322,7 +323,7 @@ PropertiesPanel.prototype.refresh = function() {
   if (!isInDOM(this.panelBody)) return;
   if (this.propertiesRootEl == null) {
     this.initDom();
-    this.onUpdate(this.doc, PopupTypes.ALL);
+    this.onUpdate(this.appData, PopupTypes.ALL);
     this.open(this.previewDoc);
     this.buildUI()
   }
@@ -359,9 +360,9 @@ PropertiesPanel.prototype.open = function(doc) {
   this.tabButtons[2].setEnabled(hasLiveShape)
 };
 
-PropertiesPanel.prototype.onUpdate = function(doc, popupType) {
-  this.doc = doc;
-  if (this.layerSection) this.layerSection.onUpdate(doc, popupType)
+PropertiesPanel.prototype.onUpdate = function(appData, popupType) {
+  this.appData = appData;
+  if (this.layerSection) this.layerSection.onUpdate(appData, popupType)
 };
 
 /**
@@ -519,10 +520,10 @@ PropertiesPanel.LayerSectionForm.prototype.open = function(doc) {
   this.sectionTitleLabel.setValue(sectionTitle)
 };
 
-PropertiesPanel.LayerSectionForm.prototype.onUpdate = function(doc, popupType) {
-  this.gradientFillRow.onUpdate(doc, popupType);
-  this.patternFillRow.onUpdate(doc, popupType);
-  for (let adjTypeKey in this.adjustmentWidgetByType) this.adjustmentWidgetByType[adjTypeKey].onUpdate(doc, popupType)
+PropertiesPanel.LayerSectionForm.prototype.onUpdate = function(appData, popupType) {
+  this.gradientFillRow.onUpdate(appData, popupType);
+  this.patternFillRow.onUpdate(appData, popupType);
+  for (let adjTypeKey in this.adjustmentWidgetByType) this.adjustmentWidgetByType[adjTypeKey].onUpdate(appData, popupType)
 };
 
 /**
