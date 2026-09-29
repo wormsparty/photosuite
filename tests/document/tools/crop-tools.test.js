@@ -112,4 +112,37 @@ describe("document/tools/crop-tools.js", () => {
     assert.equal(doc.width, 400);
     assert.equal(doc.height, 300);
   });
+
+  it("canvas anchors reposition document contents and undo restores them", () => {
+    for (let anchor = 0; anchor < 9; anchor++) {
+      const history = [];
+      const doc = {
+        width: 4, height: 4, dpi: 72,
+        layers: [], paths: [], slices: [],
+        guides: [[3], [3]],
+        selectionMask: { rect: { x: 2, y: 2, offset(dx, dy) { this.x += dx; this.y += dy; } } },
+        extraChannels: [{ rect: { x: 2, y: 2, offset(dx, dy) { this.x += dx; this.y += dy; } } }],
+        pathViewport: { panOffset: { setXY() {} } },
+        pushHistory(entry) { history.push(entry); },
+        invalidateAllLayers() {},
+      };
+      const crop = new CropTool();
+      crop.handleInput(
+        { actionKind: "fromAction", scriptActionPayload: CropToolBase.buildCanvasSizeAction(2, 2, anchor) },
+        { dispatch() {} }, doc, null, null,
+      );
+      const x = anchor % 3;
+      const y = Math.floor(anchor / 3);
+      assert.equal(history.length, 1, `anchor ${anchor} should record one undo step`);
+      assert.deepEqual([doc.width, doc.height], [2, 2]);
+      assert.deepEqual([doc.selectionMask.rect.x, doc.selectionMask.rect.y], [2 - x, 2 - y]);
+      assert.deepEqual([doc.extraChannels[0].rect.x, doc.extraChannels[0].rect.y], [2 - x, 2 - y]);
+      assert.deepEqual(doc.guides, [[3 - x], [3 - y]]);
+      crop.undo(history[0].data, doc);
+      assert.deepEqual([doc.width, doc.height], [4, 4]);
+      assert.deepEqual([doc.selectionMask.rect.x, doc.selectionMask.rect.y], [2, 2]);
+      assert.deepEqual([doc.extraChannels[0].rect.x, doc.extraChannels[0].rect.y], [2, 2]);
+      assert.deepEqual(doc.guides, [[3], [3]]);
+    }
+  });
 });

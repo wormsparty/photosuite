@@ -10,7 +10,7 @@ import { installBrowserGlobals } from "../../helpers/stub-browser-globals.js";
 import { allocBuffer, fillBuffer } from "../../../src/engine/compositing/buffer-utils.js";
 import { contentBoundsChannel, copyChannel } from "../../../src/engine/compositing/pixel-ops.js";
 import { allSegmentKnotsAreStraight, countSubpaths, flattenPathKnotCoords, isOrthogonalQuadPath, knotCountInSubpath, recordIndexForSubpath, subpathIndexForRecord, usesCompoundFill, usesEvenOddFill } from "../../../src/engine/compositing/path-records.js";
-import { PathData, boundsOfPathRecords, buildNeighborOffsets, combineEdgeCosts, computeEdgeWeights, copyOp, differenceOp, extendBoundsWithCubicBezier, filterPathExcludingSubpaths, filterPathKeepingSubpaths, intersect, isZeroCrossing, minimumCornerAngleRad, pointOnPathAtParam, selectPointsInRect, signedSubpathArea, union, xorOp } from "../../../src/engine/compositing/selection-utils.js";
+import { PathData, boundsOfPathRecords, buildNeighborOffsets, combineEdgeCosts, computeEdgeWeights, copyOp, differenceOp, extendBoundsWithCubicBezier, filterPathExcludingSubpaths, filterPathKeepingSubpaths, initPathSearch, intersect, isZeroCrossing, minimumCornerAngleRad, pointOnPathAtParam, runDijkstra, selectPointsInRect, signedSubpathArea, union, xorOp } from "../../../src/engine/compositing/selection-utils.js";
 
 installBrowserGlobals();
 
@@ -146,5 +146,24 @@ describe("engine/compositing/selection-utils.js", () => {
     assert.equal(frontier.pop(), 1);
     assert.equal(frontier.count, 1);
     assert.equal(frontier.contains(3), true);
+  });
+
+  it("intelligent scissors replaces a longer tentative route before reaching the goal", () => {
+    const offsets = new Int32Array(4 * 8);
+    const costs = new Uint8Array(4 * 8);
+    const edge = (from, slot, to, cost) => {
+      offsets[from * 8 + slot] = to - from;
+      costs[from * 8 + slot] = cost;
+    };
+    edge(0, 0, 1, 10);
+    edge(0, 1, 2, 1);
+    edge(2, 0, 1, 1);
+    edge(1, 0, 3, 1);
+    const search = initPathSearch(offsets, costs, 0);
+    runDijkstra(search, 3);
+    assert.equal(search.distance[1], 2);
+    assert.equal(search.distance[3], 3);
+    assert.deepEqual([search.predecessor[1], search.predecessor[3]], [2, 1]);
+    assert.equal(search.frontier.isEmpty(), true);
   });
 });
