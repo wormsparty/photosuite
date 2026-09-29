@@ -173,17 +173,25 @@ export function copyBuffer(src, dst) {
 }
 
 export function equals(a, b) {
-  const byteLengthA = a.buffer.byteLength;
-  const byteLengthB = b.buffer.byteLength;
+  const byteLengthA = a.byteLength;
+  const byteLengthB = b.byteLength;
   if (byteLengthA != byteLengthB) {
     return false;
   }
-  const wordsA = new Uint32Array(a.buffer, 0, byteLengthA >> 2);
-  const wordsB = new Uint32Array(b.buffer, 0, byteLengthB >> 2);
-  for (let idx = 0; idx < wordsA.length; idx++) {
-    if (wordsB[idx] != wordsA[idx]) {
-      return false;
+  let byteIndex = 0;
+  if (a.byteOffset % 4 === 0 && b.byteOffset % 4 === 0) {
+    const wordCount = Math.floor(byteLengthA / 4);
+    const wordsA = new Uint32Array(a.buffer, a.byteOffset, wordCount);
+    const wordsB = new Uint32Array(b.buffer, b.byteOffset, wordCount);
+    for (let idx = 0; idx < wordCount; idx++) {
+      if (wordsB[idx] != wordsA[idx]) return false;
     }
+    byteIndex = wordCount * 4;
+  }
+  const bytesA = new Uint8Array(a.buffer, a.byteOffset, byteLengthA);
+  const bytesB = new Uint8Array(b.buffer, b.byteOffset, byteLengthB);
+  for (; byteIndex < byteLengthA; byteIndex++) {
+    if (bytesA[byteIndex] !== bytesB[byteIndex]) return false;
   }
   return true;
 }
