@@ -353,6 +353,10 @@ function encodeBmpFromFrames(frames, width, height, unusedParam) {
 }
 
 export const bmpCodec = {
+  // Registry consumers use the common decode/encode contract. Keep the named
+  // helpers for PSD/DIB callers that also need the lower-level entry points.
+  decode: decodeBmpFromBuffer,
+  encode: encodeBmpFromFrames,
   decodeFromBuffer: decodeBmpFromBuffer,
   encodeFromFrames: encodeBmpFromFrames,
   decodeToLayerFrame: decodeBmpToLayerFrame,
