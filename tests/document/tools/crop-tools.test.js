@@ -75,6 +75,37 @@ describe("document/tools/crop-tools.js", () => {
     assert.equal(action.actionDescriptor.Vrtc.v.VrtL, "Cntr");
   });
 
+  it("Image Size sends each interpolation choice through the resize action", () => {
+    const modes = ["Nrst", "Blnr", "bicubicSharper"];
+    for (let interpolation = 0; interpolation < modes.length; interpolation++) {
+      const crop = new CropTool();
+      const received = [];
+      crop.applyCropTransformToDocument = (_doc, _resample, allLayers, _matrix, mode) => {
+        received.push({ allLayers, mode });
+        return null;
+      };
+      const history = [];
+      const doc = {
+        width: 4, height: 4, dpi: 72,
+        layers: [], paths: [], slices: [], extraChannels: [], guides: [[], []],
+        selectionMask: null,
+        pathViewport: { panOffset: { setXY() {} } },
+        pushHistory(entry) { history.push(entry); },
+        invalidateAllLayers() {},
+      };
+      const action = CropToolBase.buildImageSizeAction(2, 2, 72, interpolation);
+      assert.equal(action.actionDescriptor.Intr.v.Intp, modes[interpolation]);
+      crop.handleInput(
+        { actionKind: "fromAction", scriptActionPayload: action },
+        { dispatch() {} }, doc, null, null,
+      );
+      assert.deepEqual(received, [{ allLayers: true, mode: interpolation }]);
+      assert.deepEqual([doc.width, doc.height], [2, 2]);
+      assert.equal(history.length, 1);
+      assert.equal(history[0].name, "dialogs.imageSize");
+    }
+  });
+
   it("aspectRatioFromQuadCorners returns 1 for axis-aligned square", () => {
     chainToolPrototypes();
     const aspect = CropToolBase.aspectRatioFromQuadCorners(

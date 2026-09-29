@@ -166,4 +166,33 @@ describe("document/tools/lasso-tools.js", () => {
     assert.equal(doc.toolOverlayState.overlayTransform, null);
     assert.equal(doc.dirty, true);
   });
+
+  it("Escape cancels an active magnetic outline without committing a selection", async () => {
+    const { Point } = await import("../../../src/core/math/point.js");
+    const { KeyboardHandler } = await import("../../../src/core/keyboard-handler.js");
+    const tool = new MagneticLassoTool();
+    const doc = {
+      width: 8, height: 8,
+      getRasterData() { return new Uint8Array(8 * 8 * 4); },
+      pathViewport: { zoomScale: 1 },
+      toolOverlayState: { overlayTransform: null, squareMarkerCoords: [] },
+      selectionMask: null,
+      dirty: false,
+    };
+    const dispatched = [];
+    const dispatcher = { dispatch(event) { dispatched.push(event); } };
+    const keyboard = { isPressed(key) { return key === KeyboardHandler.Escape; } };
+    tool.startPos = new Point(1, 1);
+    tool.cursorPos = new Point(1, 1);
+    tool.onDragStart(doc, APP_DATA, NO_KEYS, pointerAt(1, 1, true));
+    assert.equal(tool.isActive(), true);
+    assert.ok(doc.toolOverlayState.overlayTransform);
+
+    tool.onKeyEvent(doc, dispatcher, APP_DATA, keyboard);
+    assert.equal(tool.isActive(), false);
+    assert.equal(doc.toolOverlayState.overlayTransform, null);
+    assert.deepEqual(doc.toolOverlayState.squareMarkerCoords, []);
+    assert.equal(doc.selectionMask, null);
+    assert.deepEqual(dispatched, []);
+  });
 });
