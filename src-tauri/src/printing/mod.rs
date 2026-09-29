@@ -175,3 +175,56 @@ pub fn submit_print_job(request: tauri::ipc::Request<'_>) -> Result<i32, String>
         Err("printing is not supported on this platform".to_string())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn converts_cups_media_dimensions_and_margins_to_pdf_points() {
+        assert!((hundredths_mm_to_points(21590) - 612.0).abs() < 1e-9);
+        assert!((hundredths_mm_to_points(27940) - 792.0).abs() < 1e-9);
+        assert!((hundredths_mm_to_points(635) - 18.0).abs() < 1e-9);
+        assert_eq!(hundredths_mm_to_points(0), 0.0);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn converts_windows_media_dimensions_to_pdf_points() {
+        assert!((microns_to_points(215900) - 612.0).abs() < 1e-9);
+        assert!((microns_to_points(279400) - 792.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn reads_the_webview_job_options_without_losing_unicode_or_orientation() {
+        let options: PrintJobOptions = serde_json::from_str(r#"{
+            "printerId":"Office", "jobName":"Zürich 日本", "copies":2,
+            "paperId":"iso_a4_210x297mm", "duplex":"long", "colorMode":"mono",
+            "quality":"high", "landscape":true
+        }"#).unwrap();
+        assert_eq!(options.printer_id, "Office");
+        assert_eq!(options.job_name, "Zürich 日本");
+        assert_eq!(options.copies, 2);
+        assert_eq!(options.paper_id.as_deref(), Some("iso_a4_210x297mm"));
+        assert_eq!(options.duplex, "long");
+        assert_eq!(options.color_mode, "mono");
+        assert_eq!(options.quality, "high");
+        assert!(options.landscape);
+    }
+
+    #[test]
+    fn serializes_paper_geometry_using_the_webview_field_names() {
+        let paper = PaperSize {
+            id: "letter".into(), name: "Letter".into(), width_pt: 612.0,
+            height_pt: 792.0, printable_width_pt: 576.0,
+            printable_height_pt: 756.0, margin_left_pt: 18.0, margin_top_pt: 18.0,
+        };
+        let value = serde_json::to_value(paper).unwrap();
+        assert_eq!(value, serde_json::json!({
+            "id":"letter", "name":"Letter", "widthPt":612.0, "heightPt":792.0,
+            "printableWidthPt":576.0, "printableHeightPt":756.0,
+            "marginLeftPt":18.0, "marginTopPt":18.0
+        }));
+    }
+}

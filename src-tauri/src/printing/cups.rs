@@ -258,6 +258,53 @@ fn max_copies(supported: &[String]) -> u32 {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn values(entries: &[&str]) -> Vec<String> {
+        entries.iter().map(|entry| (*entry).to_string()).collect()
+    }
+
+    #[test]
+    fn duplex_capabilities_offer_only_supported_edges_in_dialog_order() {
+        assert_eq!(duplex_modes(&[]), values(&["none"]));
+        assert_eq!(duplex_modes(&values(&["two-sided-short-edge", "one-sided", "two-sided-long-edge"])), values(&["none", "long", "short"]));
+        assert_eq!(duplex_modes(&values(&["two-sided-short-edge"])), values(&["none", "short"]));
+    }
+
+    #[test]
+    fn color_capabilities_handle_monochrome_automatic_and_unknown_queues() {
+        assert_eq!(color_modes(&values(&["monochrome"])), values(&["mono"]));
+        assert_eq!(color_modes(&values(&["auto", "monochrome", "color"])), values(&["color", "mono"]));
+        assert_eq!(color_modes(&[]), values(&["color", "mono"]));
+        assert_eq!(color_modes(&values(&["unsupported"])), values(&["color"]));
+    }
+
+    #[test]
+    fn quality_capabilities_map_ipp_values_and_ignore_unknowns() {
+        assert_eq!(qualities(&values(&["5", "3", "4", "99"])), values(&["draft", "normal", "high"]));
+        assert_eq!(qualities(&values(&["5"])), values(&["high"]));
+        assert_eq!(qualities(&[]), values(&["normal"]));
+        assert_eq!(qualities(&values(&["bad"])), values(&["normal"]));
+    }
+
+    #[test]
+    fn resolutions_are_positive_sorted_and_unique() {
+        assert_eq!(resolutions(&values(&["600x600dpi", "300dpi", "600dpi", "0dpi", "bad"])), vec![300, 600]);
+        assert!(resolutions(&[]).is_empty());
+    }
+
+    #[test]
+    fn copies_read_ranges_and_fall_back_when_the_capability_is_not_a_ceiling() {
+        assert_eq!(max_copies(&values(&["1-250"])), 250);
+        assert_eq!(max_copies(&values(&["1", "30"])), 30);
+        assert_eq!(max_copies(&values(&["1"])), 99);
+        assert_eq!(max_copies(&values(&["rangeOfInteger"])), 99);
+        assert_eq!(max_copies(&[]), 99);
+    }
+}
+
 pub fn submit(options: &PrintJobOptions, document: &[u8]) -> Result<i32, String> {
     let destination = cups_rs::get_destination(&options.printer_id)
         .map_err(|e| format!("printer \"{}\" is not available: {e}", options.printer_id))?;

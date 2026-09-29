@@ -599,7 +599,18 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use super::percent_decode;
+    use super::{base64_encode, percent_decode};
+
+    #[test]
+    fn base64_encodes_empty_inputs_padding_and_binary_font_bytes() {
+        for (input, expected) in [
+            (&b""[..], ""), (&b"f"[..], "Zg=="), (&b"fo"[..], "Zm8="),
+            (&b"foo"[..], "Zm9v"), (&b"foobar"[..], "Zm9vYmFy"),
+            (&[0, 255, 128, 1][..], "AP+AAQ=="),
+        ] {
+            assert_eq!(base64_encode(input), expected);
+        }
+    }
 
     #[test]
     fn round_trips_what_encode_uri_component_produces() {

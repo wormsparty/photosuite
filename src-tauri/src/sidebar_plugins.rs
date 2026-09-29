@@ -215,7 +215,91 @@ pub fn discover_sidebar_plugins_command(app: tauri::AppHandle) -> Result<Vec<Dis
 
 #[cfg(test)]
 mod tests {
-    use super::{is_safe_plugin_id, is_safe_relative_path, version_at_least};
+    use super::{is_safe_plugin_id, is_safe_relative_path, read_discovered_plugin, resolve_plugin_file, version_at_least};
+
+    struct PluginFixture(std::path::PathBuf);
+
+    impl PluginFixture {
+        fn new() -> Self {
+            static COUNTER: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+            let path = std::env::temp_dir().join(format!(
+                "photosuite-plugin-test-{}-{}",
+                std::process::id(), COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+            ));
+            std::fs::create_dir(&path).unwrap();
+            std::fs::write(path.join("index.html"), b"<p>Fixture</p>").unwrap();
+            std::fs::write(path.join("icon.svg"), b"<svg/>").unwrap();
+            Self(path)
+        }
+
+        fn manifest(&self, changes: serde_json::Value) {
+            let mut manifest = serde_json::json!({
+                "id":"fixture", "name":"日本 Zürich", "version":"1.0.0",
+                "entry":"index.html", "icon":"icon.svg", "width":320, "height":240
+            });
+            for (key, value) in changes.as_object().unwrap() {
+                manifest[key] = value.clone();
+            }
+            std::fs::write(self.0.join("plugin.json"), serde_json::to_vec(&manifest).unwrap()).unwrap();
+        }
+    }
+
+    impl Drop for PluginFixture {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[test]
+    fn discovers_valid_plugin_manifest_and_canonical_files() {
+        let fixture = PluginFixture::new();
+        fixture.manifest(serde_json::json!({"themed":true, "minAppVersion":"0.9.14"}));
+        let spec = read_discovered_plugin(&fixture.0, "0.9.14").unwrap();
+        assert_eq!(spec.id, "fixture");
+        assert_eq!(spec.name, "日本 Zürich");
+        assert_eq!(spec.version, "1.0.0");
+        assert_eq!(spec.width, 320);
+        assert_eq!(spec.height, 240);
+        assert!(spec.themed);
+        assert_eq!(std::path::Path::new(&spec.entry_path), fixture.0.join("index.html").canonicalize().unwrap());
+        assert_eq!(std::path::Path::new(&spec.icon_path), fixture.0.join("icon.svg").canonicalize().unwrap());
+    }
+
+    #[test]
+    fn rejects_invalid_manifest_values_and_missing_files() {
+        let fixture = PluginFixture::new();
+        for (changes, message) in [
+            (serde_json::json!({"id":"../bad"}), "invalid plugin id"),
+            (serde_json::json!({"name":"  "}), "non-empty"),
+            (serde_json::json!({"width":0}), "greater than zero"),
+            (serde_json::json!({"minAppVersion":"9.0.0"}), "requires app version"),
+            (serde_json::json!({"entry":"missing.html"}), "file not found"),
+            (serde_json::json!({"icon":"../outside.svg"}), "unsafe relative path"),
+        ] {
+            fixture.manifest(changes);
+            assert!(read_discovered_plugin(&fixture.0, "0.9.14").unwrap_err().contains(message));
+        }
+        std::fs::write(fixture.0.join("plugin.json"), b"{").unwrap();
+        assert!(read_discovered_plugin(&fixture.0, "0.9.14").unwrap_err().contains("invalid plugin.json"));
+    }
+
+    #[test]
+    fn plugin_entry_must_be_a_file_and_optional_theme_defaults_to_false() {
+        let fixture = PluginFixture::new();
+        fixture.manifest(serde_json::json!({}));
+        assert!(!read_discovered_plugin(&fixture.0, "0.9.14").unwrap().themed);
+        std::fs::create_dir(fixture.0.join("folder")).unwrap();
+        assert!(resolve_plugin_file(&fixture.0, "folder").unwrap_err().contains("not a file"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rejects_symlinks_to_files_outside_the_plugin_folder() {
+        let fixture = PluginFixture::new();
+        let outside = PluginFixture::new();
+        std::os::unix::fs::symlink(outside.0.join("index.html"), fixture.0.join("linked.html")).unwrap();
+        assert!(resolve_plugin_file(&fixture.0, "linked.html").unwrap_err().contains("escapes plugin dir"));
+    }
 
     #[test]
     fn plugin_id_validation() {
