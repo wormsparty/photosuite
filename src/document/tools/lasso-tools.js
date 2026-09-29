@@ -398,7 +398,7 @@ function installLassoToolPrototype() {
     doc.dirty = true;
   };
   LassoTool.prototype.getSelection = function(doc, appData, keyboard, pointerState) {
-    if (this.startPos.equals(this.cursorPos) || !this.exceededDragThreshold) return null;
+    if (!this.exceededDragThreshold) return null;
     return buildPolygonSelectionAction(this.polygonPathOverlay.coords);
   };
 }
@@ -411,4 +411,3 @@ MagneticLassoTool.prototype = Object.create(SelectTool.prototype);
 installMagneticLassoToolPrototype();
 LassoTool.prototype = Object.create(SelectTool.prototype);
 installLassoToolPrototype();
-
