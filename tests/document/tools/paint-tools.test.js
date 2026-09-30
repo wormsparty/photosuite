@@ -16,6 +16,7 @@ let GradientTool;
 let PaintBucketTool;
 let PaintTool;
 let Layer;
+let Document;
 
 function patchDomForInputHandler() {
 }
@@ -32,6 +33,7 @@ before(async () => {
   await import("../../../src/document/tools/paint-tools.js");
   ({ BrushTool, GradientTool, PaintBucketTool, PaintTool } = await import("../../../src/document/tools/paint-tools.js"));
   ({ Layer } = await import("../../../src/document/model/layer.js"));
+  ({ Document } = await import("../../../src/document/model/document.js"));
   const { TrackerRegistry } = await import("../../../src/features/trackers/tracker-registry.js");
   const { registerTrackers } = await import("../../../src/features/trackers/register-trackers.js");
   registerTrackers(TrackerRegistry);
@@ -218,6 +220,35 @@ it("red-eye channel payload matches the setChannelData {bounds, hslShift} contra
     assert.equal(history.length, 1);
     assert.deepEqual(Array.from(layer.buffer.slice(0, 4)), [0, 255, 0, 255]);
     assert.deepEqual(layer.rect, new Rect(0, 0, 2, 2));
+  });
+
+  it("transparency plus position locks allow recoloring opaque pixels, then pixel lock blocks painting", () => {
+    const doc = new Document("combined-locks.psd");
+    doc.width = 2;
+    doc.height = 1;
+    const layer = doc.newLayer();
+    layer.rect = new Rect(0, 0, 2, 1);
+    layer.buffer = Uint8Array.from([255, 0, 0, 255, 0, 0, 0, 0]);
+    layer.add.lspf = (1 << 0) | (1 << 2);
+    doc.setLayers([layer]);
+    doc.selectedLayerIndices = [0];
+    assert.equal(doc.ensureLayerEditableForTools(false, true), true);
+    const historyBefore = doc.history.length;
+    const tool = new BrushTool();
+    tool.capturePaintSourceBuffers(doc);
+    const strokeRect = new Rect(0, 0, 2, 1);
+    const greenStroke = Uint8ClampedArray.from([0, 255, 0, 255, 0, 255, 0, 255]);
+    tool.compositeStrokeToLayer(doc, "draw", greenStroke, strokeRect, strokeRect);
+    tool.finish(doc, strokeRect);
+    assert.deepEqual([...layer.buffer.slice(0, 4)], [0, 255, 0, 255]);
+    assert.equal(layer.buffer[7], 0, "transparent pixel keeps zero alpha");
+    const paintedBuffer = layer.buffer.slice();
+    assert.equal(doc.history.length, historyBefore + 1);
+
+    layer.add.lspf |= 1 << 1;
+    assert.equal(doc.ensureLayerEditableForTools(false, true), false);
+    assert.equal(doc.history.length, historyBefore + 1);
+    assert.deepEqual(layer.buffer, paintedBuffer);
   });
 
   it("clone-overlay crosshair fill uses the (buffer, value) signature", () => {

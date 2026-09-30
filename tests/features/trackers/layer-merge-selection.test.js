@@ -7,6 +7,7 @@ installBrowserGlobals();
 
 let Document;
 let Layer;
+let LayerSectionType;
 let Rect;
 let TrackerRegistry;
 
@@ -17,7 +18,7 @@ before(async () => {
   const { registerTrackers } = await import("../../../src/features/trackers/register-trackers.js");
   registerTrackers(TrackerRegistry);
   ({ Document } = await import("../../../src/document/model/document.js"));
-  ({ Layer } = await import("../../../src/document/model/layer.js"));
+  ({ Layer, LayerSectionType } = await import("../../../src/document/model/layer.js"));
   ({ Rect } = await import("../../../src/core/math/rect.js"));
 });
 
@@ -46,6 +47,49 @@ function merge(doc, kind, alt = false) {
 }
 
 describe("selected layer merge actions", () => {
+  it("rasterizes a selected pass-through group with overlapping children and restores the stack on undo", () => {
+    const doc = new Document("group-merge.psd");
+    doc.width = 2;
+    doc.height = 1;
+    const bottom = doc.newLayer();
+    bottom.setName("Bottom");
+    bottom.rect = new Rect(0, 0, 2, 1);
+    bottom.buffer = new Uint8Array([10, 0, 0, 255, 10, 0, 0, 255]);
+    const end = doc.createGroupEndLayer();
+    const red = doc.newLayer();
+    red.setName("Red child");
+    red.rect = new Rect(0, 0, 1, 1);
+    red.buffer = new Uint8Array([80, 0, 0, 255]);
+    const blue = doc.newLayer();
+    blue.setName("Blue child");
+    blue.rect = new Rect(0, 0, 1, 1);
+    blue.buffer = new Uint8Array([0, 0, 120, 255]);
+    const group = doc.newLayer();
+    group.setName("Group");
+    group.add.lsct = LayerSectionType.OpenGroup;
+    group.blendMode = "pass";
+    group.layerFlags = 24;
+    doc.setLayers([bottom, end, red, blue, group]);
+    doc.selectedLayerIndices = [4];
+    doc.markDirty();
+    const before = doc.getRasterData().slice();
+    assert.deepEqual([...before], [0, 0, 120, 255, 10, 0, 0, 255]);
+
+    const tracker = merge(doc, Layer.mergeCopy);
+    assert.equal(doc.layers.length, 2);
+    assert.equal(doc.layers[0], bottom);
+    assert.deepEqual(doc.selectedLayerIndices, [1]);
+    assert.deepEqual(doc.getRasterData(), before);
+    const snapshot = doc.getLastHistoryEntry().data;
+    tracker.undo(snapshot, doc);
+    assert.deepEqual(doc.layers, [bottom, end, red, blue, group]);
+    assert.deepEqual(doc.selectedLayerIndices, [4]);
+    assert.deepEqual(doc.getRasterData(), before);
+    tracker.redo(snapshot, doc);
+    assert.equal(doc.layers.length, 2);
+    assert.deepEqual(doc.getRasterData(), before);
+  });
+
   it("merge copy keeps the selected sources, inserts their raster result above them, and supports undo/redo", () => {
     const { doc, layers } = makeDocument();
     const rasterCalls = [];

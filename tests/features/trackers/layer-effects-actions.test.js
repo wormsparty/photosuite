@@ -201,6 +201,30 @@ describe("features/trackers/layer-effects-actions.js", () => {
     assert.equal(layer.add.lspf, (1 << 5) | 7 | (1 << 31));
   });
 
+  it("combined lock changes preserve each selected layer's other flags through undo and redo", () => {
+    const tracker = new TrackerRegistry.LayerEffectsTracker();
+    const pixel = makeLayer({ add: { lspf: (1 << 0) | (1 << 4), lsct: 0 } });
+    const group = makeLayer({
+      add: { lspf: (1 << 1) | (1 << 31), lsct: 1 },
+      isGroup: () => true,
+    });
+    const untouched = makeLayer({ add: { lspf: 1 << 2, lsct: 0 } });
+    const doc = makeDoc([pixel, untouched, group], { selectedLayerIndices: [0, 2] });
+    tracker.handleInput(
+      {
+        actionKind: Layer.toggleLayerLocks,
+        layerPropertyValue: [[false, true, true, false], [0, 1, 2, 31]],
+      },
+      {}, doc, idleKeyboard(), {},
+    );
+    assert.deepEqual(doc.layers.map((layer) => layer.add.lspf), [22, 4, 6]);
+    const snapshot = doc.getLastHistoryEntry().data;
+    tracker.undo(snapshot, doc);
+    assert.deepEqual(doc.layers.map((layer) => layer.add.lspf), [17, 4, (1 << 1) | (1 << 31)]);
+    tracker.redo(snapshot, doc);
+    assert.deepEqual(doc.layers.map((layer) => layer.add.lspf), [22, 4, 6]);
+  });
+
   it("an explicit lock target leaves the selected layer alone", () => {
     const tracker = new TrackerRegistry.LayerEffectsTracker();
     const selected = makeLayer({ add: { lspf: 0, lsct: 0 } });
