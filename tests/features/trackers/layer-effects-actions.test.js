@@ -296,4 +296,25 @@ describe("features/trackers/layer-effects-actions.js", () => {
     tracker.redo(doc.history[0].data, doc);
     assert.equal(group.blendMode, "pass");
   });
+
+  it("tracks the PSD mode actually selected for a group", () => {
+    const tracker = new TrackerRegistry.LayerEffectsTracker();
+    const tracked = [];
+    tracker.track = (descriptor) => tracked.push(descriptor);
+    const group = makeLayer({ blendMode: "norm", isGroup: () => true });
+    const doc = makeDoc([group]);
+    tracker.handleInput(
+      { actionKind: Layer.setBlendMode, layerPropertyValue: 0 },
+      {}, doc, idleKeyboard(), {},
+    );
+    assert.equal(group.blendMode, "pass");
+    assert.equal(tracked[0].actionDescriptor.T.v.Md.v.blendMode, "passThrough");
+    tracker.undo(doc.getLastHistoryEntry().data, doc);
+    tracker.handleInput(
+      { actionKind: Layer.setBlendMode, layerPropertyValue: 4 },
+      {}, doc, idleKeyboard(), {},
+    );
+    assert.equal(group.blendMode, "mul ");
+    assert.equal(tracked[1].actionDescriptor.T.v.Md.v.blendMode, "Mltp");
+  });
 });

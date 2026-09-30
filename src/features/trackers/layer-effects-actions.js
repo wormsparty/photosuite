@@ -60,7 +60,7 @@ function handleSetBlendMode(event, dispatcher, doc, panelContext, appData, event
   this.track(
     ActionDescUtil.buildSetLayerPropertyAction("Md", {
       t: "enum",
-      v: { blendMode: BlendModes.psdNames[event.layerPropertyValue] },
+      v: { blendMode: BlendModes.toPSD(blendModeCodes[event.layerPropertyValue]) },
     }),
   );
 }

@@ -100,6 +100,33 @@ describe("ui/shell/app-controller-keyboard.js", () => {
     assert.deepEqual(FakeController.prototype.textInputTagNames, ["input", "textarea", "select"]);
   });
 
+  it("Shift+Plus and Shift+Minus cycle a group's blend modes through Pass Through", () => {
+    function FakeController() {}
+    applyKeyboardHandlers(FakeController);
+    const group = { blendMode: "pass", isGroup() { return true; } };
+    const doc = { layers: [group], selectedLayerIndices: [0] };
+    const dispatched = [];
+    const controller = new FakeController();
+    let pressedKey = KeyboardHandler.Plus;
+    controller.keyboardHandler = {
+      isPressed(key) { return key === KeyboardHandler.Shift || key === pressedKey; },
+    };
+    controller.overlayManager = { getTopPopup() { return null; } };
+    controller.documentView = { getTopDialog() { return null; } };
+    controller.appData = { activeToolId: null };
+    controller.getCurrentDoc = () => doc;
+    controller.updateTemporaryToolFromModifiers = () => {};
+    controller.isShortcutKeyHeld = () => false;
+    controller.dispatch = (event) => dispatched.push({ ...event.data });
+
+    controller.onKeyEvent("down");
+    assert.equal(dispatched.at(-1).layerPropertyValue, 1, "Plus advances Pass Through to Normal");
+    group.blendMode = "norm";
+    pressedKey = KeyboardHandler.Minus;
+    controller.onKeyEvent("down");
+    assert.equal(dispatched.at(-1).layerPropertyValue, 0, "Minus returns Normal to Pass Through");
+  });
+
   it("buildInvertSelectionHistoryData keeps uf wire key", () => {
     assert.deepEqual(buildInvertSelectionHistoryData(), { uf: "inverse" });
   });

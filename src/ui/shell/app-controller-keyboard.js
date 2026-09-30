@@ -650,7 +650,7 @@ function handleShiftOnlyShortcuts(controller, ctx) {
   if (hasSelection && (keyboard.isPressed(KeyboardHandler.Plus) || keyboard.isPressed(KeyboardHandler.Minus))) {
     const selectedLayerIndex = currentDoc.selectedLayerIndices[0];
     const activeLayer = currentDoc.layers[selectedLayerIndex];
-    const blendModeCodes = BlendModes.psdCodes;
+    const blendModeCodes = activeLayer.isGroup() ? ["pass", ...BlendModes.psdCodes] : BlendModes.psdCodes;
     const blendModeCount = blendModeCodes.length;
     const currentBlendModeIndex = blendModeCodes.indexOf(activeLayer.blendMode);
     documentActionEvent.routingChannel = EventChannel.EVENT_DOCUMENT;

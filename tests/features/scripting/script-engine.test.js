@@ -36,6 +36,23 @@ describe("features/scripting/script-engine.js", () => {
     assert.equal(ScriptEngine.ScriptEval.scriptBuiltinEnums.BlendMode.HUE, "hue ");
   });
 
+  it("maps group blend mode assignments to the group menu indices", () => {
+    const group = { isGroup() { return true; } };
+    const dispatched = [];
+    const host = {
+      getCurrentDoc() { return { layers: [group] }; },
+      dispatch(event) { dispatched.push({ ...event.data }); },
+      appData: {},
+    };
+    for (const mode of ["pass", "norm", "mul "]) {
+      ScriptEngine.ScriptEval.setScriptObjectProperty(
+        { o: "Layer", value: group }, "blendMode", mode, host, {},
+      );
+    }
+    assert.deepEqual(dispatched.map((event) => event.layerPropertyValue), [0, 1, 4]);
+    assert.deepEqual(dispatched.map((event) => event.layerIndex), [0, 0, 0]);
+  });
+
   it("rectToBoundsArray builds UnitValue corners", () => {
     assert.deepEqual(
       ScriptEngine.ScriptEval.rectToBoundsArray({ x: 1, y: 2, width: 3, height: 4 }, null),

@@ -723,10 +723,13 @@ ScriptEngine.ScriptEval.setScriptObjectProperty = function(scriptObj, propertyNa
         layerPropertyValue: Math.round(255 * value / 100)
       }
     } else if (propertyName == "blendMode") {
+      const blendModeIndex = BlendModes.psdCodes.indexOf(value);
       documentActionEvent.data = {
         actionKind: Layer.setBlendMode,
         layerIndex: layerIndex,
-        layerPropertyValue: BlendModes.psdCodes.indexOf(value)
+        layerPropertyValue: layer.isGroup()
+          ? (value === "pass" ? 0 : blendModeIndex < 0 ? -1 : blendModeIndex + 1)
+          : blendModeIndex
       }
     } else if (propertyName == "name") {
       documentActionEvent.data = {
