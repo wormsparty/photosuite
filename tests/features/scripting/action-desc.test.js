@@ -495,6 +495,48 @@ describe("features/scripting/action-desc.js", () => {
     });
   }
 
+  for (const layerState of ["background", "converted-back", "named-and-locked", "other-selected", "unselected"]) {
+    it(`evaluates Background from the selected layer marker: ${layerState}`, () => {
+      const background = new Layer();
+      background.convertToBackground();
+      const ordinary = new Layer();
+      ordinary.setName("Ordinary");
+      if (layerState === "named-and-locked") {
+        ordinary.setName("Background");
+        ordinary.add.lspf = 1 << 2;
+      }
+      if (layerState === "converted-back") background.convertFromBackground();
+      const doc = {
+        layers: [background, ordinary],
+        selectedLayerIndices: layerState === "unselected" ? []
+          : [layerState === "named-and-locked" || layerState === "other-selected" ? 1 : 0],
+        ensureLayerEditableForTools() { assert.fail("Background must not use pixel editability"); },
+      };
+      const actionSets = [{ name: "Set", children: [
+        { name: "Caller", children: [
+          { enabled: true, uf: "before" },
+          { enabled: true, uf: "conditional", actionDescriptor: {
+            null: { v: { Cndt: "Bckg" } },
+            then: { v: [{ v: { val: "Branch" } }, { v: { val: "Set" } }] },
+          } },
+          { enabled: true, uf: "after" },
+        ] },
+        { name: "Branch", children: [
+          { enabled: true, uf: "background-first" },
+          { enabled: false, uf: "disabled" },
+          { enabled: true, uf: "background-last" },
+        ] },
+      ] }];
+      const dispatched = [];
+      ActionDescUtil.playActionSetSteps(doc, actionSets, "Caller", "Set", {
+        dispatch(event) { dispatched.push(event.data.uf); },
+      });
+      assert.deepEqual(dispatched, layerState === "background"
+        ? ["before", "background-first", "background-last", "after"]
+        : ["before", "after"]);
+    });
+  }
+
   for (const [label, confirm, expected] of [
     ["accepted", () => true, ["before", "after"]],
     ["cancelled", () => false, ["before"]],

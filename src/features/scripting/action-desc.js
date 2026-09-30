@@ -35,7 +35,7 @@ function targetClassIdFromRef(targetRef) {
 }
 
 function evaluateActionCondition(doc, conditionType, activeLayer) {
-  if (conditionType == "Bckg") return false;
+  if (conditionType == "Bckg") return activeLayer?.add.lnsr === "bgnd";
   if (conditionType == "Pxel" && doc.ensureLayerEditableForTools(false)) return true;
   if (!activeLayer) return false;
   if (conditionType == "Adjs" && adjustmentKeyOf(activeLayer.add)) return true;
