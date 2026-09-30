@@ -41,6 +41,24 @@ const assertValueFixture = (node, fixture) => {
 };
 
 describe("document/formats/psd/descriptor-codec.js", () => {
+  describe("unsupported descriptor types", () => {
+    for (const type of ["zzzz", "UnFl", "", "longer", undefined]) {
+      it(`rejects unsupported writer type ${String(type)}`, () => {
+        assert.throws(() => encodeValue({ t: type, v: 7 }), /unsupported OSType/);
+      });
+    }
+    it("rejects an unsupported nested list item instead of silently dropping it", () => {
+      assert.throws(() => encodeValue({ t: "VlLs", v: [
+        { t: "long", v: 1 }, { t: "zzzz", v: 7 }, { t: "bool", v: true },
+      ] }), /unsupported OSType/);
+    });
+    it("rejects an unsupported descriptor field instead of returning invalid bytes", () => {
+      assert.throws(() => encodeValue({ t: "Objc", v: {
+        classID: "test", bad: { t: "zzzz", v: 7 }, next: { t: "long", v: 2 },
+      } }), /unsupported OSType/);
+    });
+  });
+
   it("readOSKey reads a 4-char padded key and a length-prefixed key", () => {
     // len=0 → 4-char padded "Rd  "
     const padded = new Uint8Array([0, 0, 0, 0, ...ascii("Rd  ")]);

@@ -55,6 +55,11 @@ const OSTYPE_FIELDS = {
   indx: ["classID"],
 };
 
+const WRITABLE_TYPES = new Set([
+  "obj ", "VlLs", "UntF", "doub", "bool", "long", "comp", "Objc", "TEXT", "enum", "tdta", "ObAr",
+  "Pth ", "Clss", "type", "rele", "prop", "Enmr", "indx", "name", "alis",
+]);
+
 /**
  * Four-char keys that are nonetheless length-prefixed on the wire (their
  * meaning would otherwise be ambiguous with padded short keys).
@@ -304,6 +309,7 @@ function writeValue(buf, pos, node) {
   var startPos = pos;
   var typeCode = node.t;
   var value = node.v;
+  if (!WRITABLE_TYPES.has(typeCode)) throw new Error("psd-descriptor: unsupported OSType " + typeCode);
   BinaryUtils.writeAscii(buf, pos, typeCode);
   pos += 4;
   switch (typeCode) {
@@ -444,9 +450,7 @@ function writeValue(buf, pos, node) {
       pos += alisLen;
       break;
     default:
-      console.log("unknown oskey: " + typeCode);
-      pos = startPos;
-      break;
+      throw new Error("psd-descriptor: unsupported OSType " + typeCode);
   }
   return pos - startPos;
 }
