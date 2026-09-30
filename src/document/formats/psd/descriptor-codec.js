@@ -212,7 +212,7 @@ function readValue(data, pos, debug, depth) {
       var clssName = BinaryUtils.readUnicodeName(data, pos);
       pos += 4 + BinaryUtils.readUint32BE(data, pos) * 2;
       var clssID = readOSKey(data, pos);
-      pos += 4 + Math.max(4, clssID.length);
+      pos += keySize(data, pos);
       result.v = { classID: clssID };
       if (clssName != "") result.v.__name = clssName;
       if (typeCode == "rele") {
@@ -234,7 +234,7 @@ function readValue(data, pos, debug, depth) {
       result.v = {};
       for (var i = 0; i < fieldDefs.length; i++) {
         var refFieldVal = readOSKey(data, pos);
-        pos += 4 + Math.max(4, refFieldVal.length);
+        pos += keySize(data, pos);
         result.v[fieldDefs[i]] = refFieldVal;
       }
       if (typeCode == "name") {
@@ -273,14 +273,14 @@ function readObjectArray(data, pos, result) {
   pos += 4 + BinaryUtils.readUint32BE(data, pos) * 2;
   if (arrName != "") throw arrName;
   var arrClassID = readOSKey(data, pos);
-  pos += 4 + Math.max(4, arrClassID.length);
+  pos += keySize(data, pos);
   result.v = { classID: arrClassID, arr: [] };
   var channelCount = BinaryUtils.readUint32BE(data, pos);
   pos += 4;
   requireCount(data, pos, channelCount, 17);
   for (var i = 0; i < channelCount; i++) {
     var chID = readOSKey(data, pos);
-    pos += 4 + Math.max(4, chID.length);
+    pos += keySize(data, pos);
     var chType = BinaryUtils.readString(data, pos, 4);
     pos += 4;
     var chUID = BinaryUtils.readString(data, pos, 4);
@@ -360,13 +360,13 @@ function writeValue(buf, pos, node) {
       BinaryUtils.writeUnicodeString(buf, pos, "\0");
       pos += 6;
       writeOSKey(buf, pos, value.classID);
-      pos += 4 + Math.max(4, value.classID.length);
+      pos += keySize(buf.data, pos);
       BinaryUtils.writeSize(buf, pos, value.arr.length);
       pos += 4;
       for (var i = 0; i < value.arr.length; i++) {
         var ch = value.arr[i];
         writeOSKey(buf, pos, ch.id);
-        pos += 4 + Math.max(4, ch.id.length);
+        pos += keySize(buf.data, pos);
         BinaryUtils.writeAscii(buf, pos, ch.type);
         pos += 4;
         BinaryUtils.writeAscii(buf, pos, ch.uID);
@@ -399,7 +399,7 @@ function writeValue(buf, pos, node) {
       pos += 4 + clssName.length * 2 + 2;
       var clssID = value.classID;
       writeOSKey(buf, pos, clssID);
-      pos += 4 + Math.max(4, clssID.length);
+      pos += keySize(buf.data, pos);
       if (typeCode == "rele") {
         BinaryUtils.writeInt32(buf, pos, value.val);
         pos += 4;
@@ -415,7 +415,7 @@ function writeValue(buf, pos, node) {
       for (var i = 0; i < fieldDefs.length; i++) {
         var refFieldVal = value[fieldDefs[i]];
         writeOSKey(buf, pos, refFieldVal);
-        pos += 4 + Math.max(4, refFieldVal.length);
+        pos += keySize(buf.data, pos);
       }
       if (typeCode == "name") {
         BinaryUtils.writeUnicodeString(buf, pos, value.val + "\0");
