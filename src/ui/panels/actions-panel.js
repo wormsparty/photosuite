@@ -244,6 +244,11 @@ function installFooterButtons(panel) {
 }
 
 function toggleRecording(panel, doc, actionSets, selected) {
+  if (doc.recordingActionSet != null) {
+    panel.items[FOOTER_RECORD].setLabel(panel.recordGlyph);
+    doc.recordingActionSet = null;
+    return;
+  }
   if (actionSets.length == 0) {
     showToast("Create an Action Set first.");
     return;
@@ -252,17 +257,8 @@ function toggleRecording(panel, doc, actionSets, selected) {
     showToast("Select a target action first.");
     return;
   }
-  let recordingSet = doc.recordingActionSet;
-  let icon;
-  if (recordingSet == null) {
-    icon = panel.stopGlyph;
-    recordingSet = panel.selectedPath;
-  } else {
-    icon = panel.recordGlyph;
-    recordingSet = null;
-  }
-  panel.items[FOOTER_RECORD].setLabel(icon);
-  doc.recordingActionSet = recordingSet;
+  panel.items[FOOTER_RECORD].setLabel(panel.stopGlyph);
+  doc.recordingActionSet = selected.slice();
 }
 
 function createEmptyActionSet(actionSetsLength) {
@@ -328,6 +324,25 @@ function deleteSelectedNode(panel, actionSets, selected) {
       (selected.length > 1 && !isSelectedAction(actionSets, selected))) {
     showToast("Select an Action first.");
     return;
+  }
+  const recording = panel.doc.recordingActionSet;
+  if (recording != null) {
+    const sameSet = recording[0] == selected[0];
+    const sameAction = sameSet && recording[1] == selected[1];
+    const deletesRecordingTarget =
+      (selected.length == 1 && sameSet) ||
+      (selected.length == 2 && sameAction);
+    if (deletesRecordingTarget) {
+      panel.doc.recordingActionSet = null;
+      panel.items[FOOTER_RECORD].setLabel(panel.recordGlyph);
+    } else if (selected.length == 1 && selected[0] < recording[0]) {
+      recording[0]--;
+    } else if (selected.length == 2 && sameSet && selected[1] < recording[1]) {
+      recording[1]--;
+    } else if (selected.length == 3 && sameAction &&
+               recording[2] != null && selected[2] <= recording[2]) {
+      recording[2]--;
+    }
   }
   const siblings = siblingListForPath(actionSets, selected);
   const lastIdx = selected.length - 1;

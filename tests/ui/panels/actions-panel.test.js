@@ -208,4 +208,76 @@ describe("ui/panels/actions-panel.js", () => {
       assert.deepEqual(dispatched, []);
     });
   }
+
+  it("deleting a middle step preserves sibling order and a valid selection", () => {
+    const steps = ["first", "middle", "last"].map((uf) => ({ uf, enabled: true }));
+    const panel = Object.create(ActionsPanel.prototype);
+    panel.doc = { actionSets: [{ name: "Set", children: [{ name: "Action", children: steps }] }], recordingActionSet: null };
+    panel.selectedPath = [0, 0, 1];
+    panel.items = [{}, {}, {}, {}, {}];
+    panel.redraw = () => {};
+    panel.onFooterClick({ currentTarget: panel.items[4] });
+    assert.deepEqual(steps.map(({ uf }) => uf), ["first", "last"]);
+    assert.deepEqual(panel.selectedPath, [0, 0, 1]);
+  });
+
+  it("stops recording when the recorded action is deleted", () => {
+    const panel = Object.create(ActionsPanel.prototype);
+    panel.doc = {
+      actionSets: [{ name: "Set", children: [{ name: "Action", children: [] }] }],
+      recordingActionSet: [0, 0],
+    };
+    panel.selectedPath = [0, 0];
+    panel.recordGlyph = "record";
+    panel.items = [{ setLabel(value) { assert.equal(value, "record"); } }, {}, {}, {}, {}];
+    panel.redraw = () => {};
+    panel.onFooterClick({ currentTarget: panel.items[4] });
+    assert.equal(panel.doc.actionSets[0].children.length, 0);
+    assert.equal(panel.doc.recordingActionSet, null);
+  });
+
+  it("Stop ends recording after selection moves to the set", () => {
+    const panel = Object.create(ActionsPanel.prototype);
+    panel.doc = {
+      actionSets: [{ name: "Set", children: [{ name: "Action", children: [] }] }],
+      recordingActionSet: [0, 0],
+    };
+    panel.selectedPath = [0];
+    panel.recordGlyph = "record";
+    panel.items = [{ setLabel(value) { assert.equal(value, "record"); } }];
+    panel.onFooterClick({ currentTarget: panel.items[0] });
+    assert.equal(panel.doc.recordingActionSet, null);
+  });
+
+  it("deleting a preceding action keeps the recording cursor on its action", () => {
+    const panel = Object.create(ActionsPanel.prototype);
+    panel.doc = {
+      actionSets: [{ name: "Set", children: [
+        { name: "Before", children: [] },
+        { name: "Recorded", children: [] },
+      ] }],
+      recordingActionSet: [0, 1],
+    };
+    panel.selectedPath = [0, 0];
+    panel.items = [{}, {}, {}, {}, {}];
+    panel.redraw = () => {};
+    panel.onFooterClick({ currentTarget: panel.items[4] });
+    assert.deepEqual(panel.doc.actionSets[0].children.map(({ name }) => name), ["Recorded"]);
+    assert.deepEqual(panel.doc.recordingActionSet, [0, 0]);
+  });
+
+  it("deleting an earlier step moves the active recording cursor with its step", () => {
+    const steps = ["first", "second", "third"].map((uf) => ({ uf, enabled: true }));
+    const panel = Object.create(ActionsPanel.prototype);
+    panel.doc = {
+      actionSets: [{ name: "Set", children: [{ name: "Action", children: steps }] }],
+      recordingActionSet: [0, 0, 2],
+    };
+    panel.selectedPath = [0, 0, 0];
+    panel.items = [{}, {}, {}, {}, {}];
+    panel.redraw = () => {};
+    panel.onFooterClick({ currentTarget: panel.items[4] });
+    assert.deepEqual(steps.map(({ uf }) => uf), ["second", "third"]);
+    assert.deepEqual(panel.doc.recordingActionSet, [0, 0, 1]);
+  });
 });
