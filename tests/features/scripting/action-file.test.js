@@ -238,6 +238,21 @@ describe("features/scripting/action-file.js", () => {
     assert.equal(parsed.children[0].children[1].uf, "Mk  ");
   });
 
+  it("preserves named object-count metadata and following descriptor/step boundaries", () => {
+    const set = sampleActionSet();
+    const descriptor = { classID: "null", channels: { t: "ObAr", v: {
+      classID: "null", __name: "é表", objectCount: 7, arr: [],
+    } }, following: { t: "bool", v: true } };
+    set.children[0].children[0].actionDescriptor = descriptor;
+    set.children[0].children.push({ expanded: false, enabled: true,
+      dialogOptionsEnabled: false, dialogOptions: 0, uf: "Mk  ", eventClassName: "" });
+    const bytes = new Uint8Array(ActionParser.serialize(set));
+    const [parsed] = ActionParser.parse(bytes.buffer);
+    assert.deepEqual(parsed.children[0].children[0].actionDescriptor, descriptor);
+    assert.equal(parsed.children[0].children[1].uf, "Mk  ");
+    assert.deepEqual(new Uint8Array(ActionParser.serialize(parsed)), bytes);
+  });
+
   it("rejects negative embedded descriptor field counts and key lengths", () => {
     // Descriptor starts at byte 85: six-byte empty Unicode name, eight-byte
     // class key, then the four-byte field count. Tiny fixtures are safe before.

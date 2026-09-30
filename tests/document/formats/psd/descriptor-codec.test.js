@@ -114,6 +114,70 @@ describe("document/formats/psd/descriptor-codec.js", () => {
   });
 
   describe("empty object arrays", () => {
+  it("ObAr preserves an independent count and a Unicode array name", () => {
+    assertValueFixture({ t: "ObAr", v: {
+      classID: "xx", __name: "é表", objectCount: 4,
+      arr: [{ id: "yy", type: "UnFl", uID: "#Pxl", arr: [1.25] }],
+    } }, [
+      ...ascii("ObAr"), ...u32(4), ...unicode("é表"), ...explicitKey("xx"), ...u32(1),
+      ...explicitKey("yy"), ...ascii("UnFl#Pxl"), ...u32(1), ...float64(1.25),
+    ]);
+  });
+
+  it("ObAr preserves a Unicode name without channels", () => {
+    assertValueFixture({ t: "ObAr", v: { classID: "xx", __name: "é表", arr: [] } }, [
+      ...ascii("ObAr"), ...u32(0), ...unicode("é表"), ...explicitKey("xx"), ...u32(0),
+    ]);
+  });
+
+  it("ObAr preserves a count independent of the first channel length", () => {
+    assertValueFixture({ t: "ObAr", v: {
+      classID: "xx", objectCount: 4,
+      arr: [{ id: "yy", type: "UnFl", uID: "#Pxl", arr: [1.25] }],
+    } }, [
+      ...ascii("ObAr"), ...u32(4), ...unicode(""), ...explicitKey("xx"), ...u32(1),
+      ...explicitKey("yy"), ...ascii("UnFl#Pxl"), ...u32(1), ...float64(1.25),
+    ]);
+  });
+
+  it("ObAr rejects invalid explicit object counts instead of coercing them", () => {
+    for (const objectCount of [-1, 4294967296, 1.5, NaN, Infinity, "3", null]) {
+      assert.throws(() => encodeValue({ t: "ObAr", v: { classID: "xx", arr: [], objectCount } }),
+        /count|integer|range/i);
+    }
+  });
+
+  for (const objectCount of [1, 7, 4294967295]) {
+    const fixture = [
+      ...ascii("ObAr"), ...u32(objectCount), ...unicode(""), ...explicitKey("xx"), ...u32(0),
+    ];
+    it(`ObAr retains declared object count ${objectCount} without channels`, () => {
+      // The count is metadata; there are no objects or channels to allocate.
+      const data = new Uint8Array(fixture);
+      assert.deepEqual(DescriptorCodec.readValue(data, 0), {
+        t: "ObAr", v: { classID: "xx", arr: [], objectCount }, size: data.length,
+      });
+    });
+    it(`ObAr exports declared object count ${objectCount} without channels`, () => {
+      assert.deepEqual(encodeValue({ t: "ObAr", v: { classID: "xx", arr: [], objectCount } }),
+        new Uint8Array(fixture));
+    });
+  }
+
+  it("ObAr metadata retains the following list item's byte boundary", () => {
+    const fixture = new Uint8Array([
+      ...ascii("VlLs"), ...u32(2),
+      ...ascii("ObAr"), ...u32(3), ...unicode(""), ...explicitKey("xx"), ...u32(0),
+      ...ascii("bool"), 1,
+    ]);
+    assert.deepEqual(DescriptorCodec.readValue(fixture, 0), {
+      t: "VlLs", v: [
+        { t: "ObAr", v: { classID: "xx", arr: [], objectCount: 3 } },
+        { t: "bool", v: true },
+      ], size: fixture.length,
+    });
+  });
+
   it("empty ObAr emits a zero array count and round-trips", () => {
     assertValueFixture({ t: "ObAr", v: { classID: "xx", arr: [] } }, [
       ...ascii("ObAr"), ...u32(0), ...unicode(""), ...explicitKey("xx"), ...u32(0),

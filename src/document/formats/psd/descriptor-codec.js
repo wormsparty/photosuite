@@ -272,10 +272,10 @@ function readObjectArray(data, pos, result) {
   pos += 4;
   var arrName = BinaryUtils.readUnicodeName(data, pos);
   pos += 4 + BinaryUtils.readUint32BE(data, pos) * 2;
-  if (arrName != "") throw arrName;
   var arrClassID = readOSKey(data, pos);
   pos += keySize(data, pos);
   result.v = { classID: arrClassID, arr: [] };
+  if (arrName !== "") result.v.__name = arrName;
   var channelCount = BinaryUtils.readUint32BE(data, pos);
   pos += 4;
   requireCount(data, pos, channelCount, 17);
@@ -296,6 +296,9 @@ function readObjectArray(data, pos, result) {
       pos += 8;
     }
   }
+  // The wire object count is independent of each channel's value count.
+  var inferredCount = result.v.arr.length === 0 ? 0 : result.v.arr[0].arr.length;
+  if (arrCount !== inferredCount) result.v.objectCount = arrCount;
   return pos;
 }
 
@@ -358,10 +361,16 @@ function writeValue(buf, pos, node) {
       pos += value.length;
       break;
     case "ObAr":
-      BinaryUtils.writeSize(buf, pos, value.arr.length === 0 ? 0 : value.arr[0].arr.length);
+      var objectCount = value.objectCount === undefined
+        ? (value.arr.length === 0 ? 0 : value.arr[0].arr.length) : value.objectCount;
+      if (!Number.isInteger(objectCount) || objectCount < 0 || objectCount > 0xffffffff) {
+        throw new Error("psd-descriptor: object count out of range");
+      }
+      BinaryUtils.writeSize(buf, pos, objectCount);
       pos += 4;
-      BinaryUtils.writeUnicodeString(buf, pos, "\0");
-      pos += 6;
+      var objectName = value.__name == null ? "" : value.__name;
+      BinaryUtils.writeUnicodeString(buf, pos, objectName + "\0");
+      pos += 4 + (objectName.length + 1) * 2;
       writeOSKey(buf, pos, value.classID);
       pos += keySize(buf.data, pos);
       BinaryUtils.writeSize(buf, pos, value.arr.length);
