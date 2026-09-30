@@ -95,4 +95,31 @@ describe("ui/panels/actions-panel.js", () => {
     assert.equal(events[0].data.popupTypeId, PopupTypes.ACTIONS);
     assert.equal(events[0].data.actionSetIndex, 0);
   });
+
+  it("Play with an action set but no selected row does not dispatch or throw", () => {
+    const panel = Object.create(ActionsPanel.prototype);
+    panel.doc = {
+      actionSets: [{ name: "Set", children: [{ name: "Action", children: [] }] }],
+      recordingActionSet: null,
+    };
+    panel.selectedPath = "topMenu.file";
+    const dispatched = [];
+    panel.dispatch = (event) => dispatched.push(event);
+    assert.doesNotThrow(() => panel.playSelectedAction());
+    assert.deepEqual(dispatched, []);
+  });
+
+  it("Play dispatches the selected action and set names", () => {
+    const panel = Object.create(ActionsPanel.prototype);
+    panel.doc = {
+      actionSets: [{ name: "Set", children: [{ name: "Action", children: [] }] }],
+      recordingActionSet: null,
+    };
+    panel.selectedPath = [0, 0];
+    const dispatched = [];
+    panel.dispatch = (event) => dispatched.push(event.data);
+    panel.playSelectedAction();
+    assert.equal(dispatched.length, 1);
+    assert.deepEqual(dispatched[0].recordedActionPair, ["Action", "Set"]);
+  });
 });

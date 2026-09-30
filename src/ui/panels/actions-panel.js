@@ -160,7 +160,9 @@ ActionsPanel.prototype.playSelectedAction = function() {
     showToast("No Actions Present");
     return;
   }
-  if (selected.length == 1) {
+  const actionSet = Array.isArray(selected) ? actionSets[selected[0]] : null;
+  const action = actionSet?.children?.[selected[1]];
+  if (!action) {
     showToast("Select an Action first");
     return;
   }
@@ -168,9 +170,6 @@ ActionsPanel.prototype.playSelectedAction = function() {
     showToast("You can not apply actions while recording actions");
     return;
   }
-  if (selected.length == 1) selected.push(0);
-  const actionSet = actionSets[selected[0]];
-  const action = actionSet.children[selected[1]];
   const replayEvt = new AppEvent(EventType.uiDispatch, true);
   replayEvt.data = {
     dispatchKind: UiCommand.replayRecordedActionPair,
