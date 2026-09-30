@@ -438,7 +438,9 @@ function decodeTiledChannelData(bytes, offset, planarBuffer, compressionProps, b
       var tileH = Math.min(imageHeight - tileY, TILE_SIZE);
       var pixelCount = tileW * tileH;
       tileBounds.setXY(tileX, tileY, tileW, tileH);
-      readTilePixels(bytes, tileIds[tileIndex++], pixelCount * channelCount, compressionType, sampleCount, channelSlices);
+      var tileOffset = tileIds[tileIndex++];
+      var tileEnd = tileIndex < tileIds.length ? tileIds[tileIndex] : bytes.length;
+      readTilePixels(bytes, tileOffset, pixelCount * channelCount, compressionType, sampleCount, channelSlices, tileEnd);
       if (bitDepth == 100 || bitDepth == 150) {
         // 8-bit samples: no unpacking needed.
       } else if (bitDepth == 250) {
@@ -494,13 +496,15 @@ function getHdrFloatByteLut() {
 }
 
 /** Decode one compressed tile's samples into the channel-slice planes. */
-function readTilePixels(bytes, offset, byteLength, compressionType, sampleCount, channelSlices) {
+function readTilePixels(bytes, offset, byteLength, compressionType, sampleCount, channelSlices, tileEnd) {
   if (compressionType == 1) {
     decodeRleTile(bytes, offset, byteLength, sampleCount, channelSlices);
   } else if (compressionType == 2) {
-    decodeZlibTile(bytes, offset, byteLength, channelSlices);
+    decodeInterleavedTile(bytes.subarray(0, tileEnd), offset, byteLength, sampleCount, channelSlices, true);
+  } else if (compressionType == 0) {
+    decodeInterleavedTile(bytes.subarray(0, tileEnd), offset, byteLength, sampleCount, channelSlices, false);
   } else {
-    alert("Unknown compression " + compressionType);
+    throw new RangeError("xcf: unsupported compression " + compressionType);
   }
 }
 
@@ -542,16 +546,37 @@ function decodeRleTile(bytes, offset, byteLength, sampleCount, channelSlices) {
   }
 }
 
-/** Decode a zlib-compressed interleaved tile into per-channel planes. */
-function decodeZlibTile(bytes, offset, byteLength, channelSlices) {
-  var inflated = pako.inflate(bytes.slice(offset));
-  var stride = Math.round(inflated.length / byteLength);
-  for (var byteIdx = 0; byteIdx < byteLength; byteIdx++) {
-    var src = byteIdx * stride;
-    channelSlices[0][byteIdx] = inflated[src];
-    channelSlices[1][byteIdx] = inflated[src + 1];
-    channelSlices[2][byteIdx] = inflated[src + 2];
-    channelSlices[3][byteIdx] = stride == 3 ? 255 : inflated[src + 3];
+/** Decode raw/zlib pixel-interleaved big-endian samples into byte planes. */
+function decodeInterleavedTile(bytes, offset, byteLength, sampleCount, channelSlices, compressed) {
+  if (!Number.isInteger(sampleCount) || sampleCount < 1 || sampleCount > channelSlices.length || !Number.isSafeInteger(byteLength) || byteLength < 1 || byteLength > channelSlices[0].length) {
+    throw new RangeError("xcf: invalid interleaved channel layout");
+  }
+  var expectedLength = byteLength * sampleCount;
+  var decoded;
+  if (compressed) {
+    decoded = new Uint8Array(expectedLength);
+    var written = 0;
+    var inflater = new pako.Inflate({ chunkSize: Math.min(expectedLength + 1, 16384) });
+    inflater.onData = function(chunk) {
+      if (chunk.length > expectedLength - written) throw new RangeError("xcf: invalid zlib tile length");
+      decoded.set(chunk, written);
+      written += chunk.length;
+    };
+    // Without a forced finish, ended proves that the checksum/stream end was read.
+    inflater.push(bytes.subarray(offset), false);
+    if (!inflater.ended || inflater.err || written != expectedLength) throw new RangeError("xcf: invalid zlib tile stream or length");
+  } else {
+    requireBytes(bytes, offset, expectedLength);
+    decoded = bytes.subarray(offset, offset + expectedLength);
+  }
+  var bytesPerSample = channelSlices[0].length / (TILE_SIZE * TILE_SIZE);
+  var pixelCount = byteLength / bytesPerSample;
+  for (var px = 0; px < pixelCount; px++) {
+    for (var ch = 0; ch < sampleCount; ch++) {
+      for (var sampleByte = 0; sampleByte < bytesPerSample; sampleByte++) {
+        channelSlices[ch][sampleByte * pixelCount + px] = decoded[(px * sampleCount + ch) * bytesPerSample + sampleByte];
+      }
+    }
   }
 }
 
