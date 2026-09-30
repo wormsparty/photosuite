@@ -308,10 +308,13 @@ function resolveGimpFontName(fontName) {
 
 /** Parse a text-layer parasite's S-expression payload into a bindings object. */
 function parseTextParasite(parasiteBytes) {
+  if (!parasiteBytes.length || parasiteBytes[parasiteBytes.length - 1] != 0) {
+    throw "xcf: unterminated text parasite";
+  }
   var source = "(" + BinaryUtils.readUtf8(parasiteBytes, 0, parasiteBytes.length - 1) + ")";
   var tokens = [];
   var bindings = {};
-  parseSExprTokens(source, 1, tokens);
+  if (parseSExprTokens(source, 1, tokens) != source.length) throw "xcf: trailing text parasite data";
   applySExprBindingsToObject(tokens, bindings);
   return bindings;
 }
@@ -320,37 +323,53 @@ function parseTextParasite(parasiteBytes) {
 function applySExprBindingsToObject(tokens, target) {
   for (var tokenIdx = 0; tokenIdx < tokens.length; tokenIdx++) {
     var entry = tokens[tokenIdx];
+    if (!Array.isArray(entry) || entry.length < 2 || typeof entry[0] != "string") {
+      throw "xcf: invalid text parasite binding";
+    }
     var key = entry[0];
     target[key] = entry.length == 2 ? entry[1] : entry.slice(1);
   }
 }
 
-/** Recursive-descent tokenizer for the S-expression parasite format. */
+/** Bounded iterative tokenizer for the S-expression parasite format. */
 function parseSExprTokens(source, pos, outTokens) {
+  var lists = [outTokens];
   while (true) {
     if (pos >= source.length) throw "xcf: unterminated s-expression";
     var ch = source.charAt(pos);
     pos++;
     if (ch == "(") {
+      if (lists.length >= 128) throw "xcf: text parasite nesting limit exceeded";
       var nested = [];
-      pos = parseSExprTokens(source, pos, nested);
       outTokens.push(nested);
-    } else if (ch == " " || ch == "\n" || ch == "\r") {
+      lists.push(nested);
+      outTokens = nested;
+    } else if (ch == " " || ch == "\n" || ch == "\r" || ch == "\t") {
       // whitespace separator
     } else if (ch == ")") {
-      return pos;
+      lists.pop();
+      if (!lists.length) return pos;
+      outTokens = lists[lists.length - 1];
     } else if (ch == "\"") {
       var tokenStart = pos;
       while (true) {
+        if (pos >= source.length) throw "xcf: unterminated text parasite string";
         var esc = source[pos];
         pos++;
         if (esc == "\"") break;
-        if (esc == "\\") pos++;
+        if (esc == "\\") {
+          if (pos >= source.length) throw "xcf: unterminated text parasite escape";
+          pos++;
+        }
       }
       outTokens.push(JSON.parse(source.slice(tokenStart - 1, pos)));
     } else {
       var tokenStart = pos - 1;
-      while (source[pos] != " " && source[pos] != ")") pos++;
+      while (pos < source.length) {
+        var next = source[pos];
+        if (next == " " || next == "\n" || next == "\r" || next == "\t" || next == "(" || next == ")" || next == "\"") break;
+        pos++;
+      }
       outTokens.push(source.slice(tokenStart, pos));
     }
   }
