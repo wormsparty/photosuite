@@ -108,6 +108,28 @@ describe("features/trackers/layer-effects-actions.js", () => {
     assert.equal(doc.history[0].data.layerPropertyValue, 128);
   });
 
+  it("opacity changes apply to every selected layer and a slider drag has one undo step", () => {
+    const tracker = new TrackerRegistry.LayerEffectsTracker();
+    tracker.track = () => {};
+    const first = makeLayer({ Opct: 255 });
+    const unselected = makeLayer({ Opct: 77 });
+    const last = makeLayer({ Opct: 192 });
+    const doc = makeDoc([first, unselected, last], { selectedLayerIndices: [0, 2] });
+    for (const opacity of [160, 64]) {
+      tracker.handleInput(
+        { actionKind: Layer.setLayerOpacity, layerPropertyValue: opacity },
+        {}, doc, idleKeyboard(), {},
+      );
+    }
+    assert.deepEqual(doc.layers.map((layer) => layer.Opct), [64, 77, 64]);
+    assert.equal(doc.history.length, 1);
+    assert.equal(doc.history[0].data.opacityActionDescriptor.T.v.Opct.v.val, 25);
+    tracker.undo(doc.history[0].data, doc);
+    assert.deepEqual(doc.layers.map((layer) => layer.Opct), [255, 77, 192]);
+    tracker.redo(doc.history[0].data, doc);
+    assert.deepEqual(doc.layers.map((layer) => layer.Opct), [64, 77, 64]);
+  });
+
   it("setFillOpacity redo/undo swaps iOpa after registry attach", () => {
     const tracker = new TrackerRegistry.LayerEffectsTracker();
     const layer = makeLayer({ add: { iOpa: 255, lspf: 0, lsct: 0 } });
@@ -159,6 +181,44 @@ describe("features/trackers/layer-effects-actions.js", () => {
     assert.deepEqual([first.add.lspf, second.add.lspf], [16, 20]);
     tracker.redo(doc.history[0].data, doc);
     assert.deepEqual([first.add.lspf, second.add.lspf], [20, 20]);
+  });
+
+  it("all four lock controls set their own bits and Undo restores prior flags", () => {
+    const tracker = new TrackerRegistry.LayerEffectsTracker();
+    const layer = makeLayer({ add: { lspf: 1 << 5, lsct: 0 } });
+    const doc = makeDoc([layer]);
+    tracker.handleInput(
+      {
+        actionKind: Layer.toggleLayerLocks,
+        layerPropertyValue: [[true, true, true, true], [0, 1, 2, 31]],
+      },
+      {}, doc, idleKeyboard(), {},
+    );
+    assert.equal(layer.add.lspf, (1 << 5) | 7 | (1 << 31));
+    tracker.undo(doc.history[0].data, doc);
+    assert.equal(layer.add.lspf, 1 << 5);
+    tracker.redo(doc.history[0].data, doc);
+    assert.equal(layer.add.lspf, (1 << 5) | 7 | (1 << 31));
+  });
+
+  it("an explicit lock target leaves the selected layer alone", () => {
+    const tracker = new TrackerRegistry.LayerEffectsTracker();
+    const selected = makeLayer({ add: { lspf: 0, lsct: 0 } });
+    const target = makeLayer({ add: { lspf: 2, lsct: 0 } });
+    const doc = makeDoc([selected, target]);
+    tracker.handleInput(
+      {
+        actionKind: Layer.toggleLayerLocks,
+        layerIndex: 1,
+        layerPropertyValue: [[true, false], [2, 1]],
+      },
+      {}, doc, idleKeyboard(), {},
+    );
+    assert.deepEqual([selected.add.lspf, target.add.lspf], [0, 4]);
+    tracker.undo(doc.history[0].data, doc);
+    assert.deepEqual([selected.add.lspf, target.add.lspf], [0, 2]);
+    tracker.redo(doc.history[0].data, doc);
+    assert.deepEqual([selected.add.lspf, target.add.lspf], [0, 4]);
   });
 
   it("renameLayer history tuple is [index, oldName, newName, lnsr, null]", () => {
