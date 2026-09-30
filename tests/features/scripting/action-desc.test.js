@@ -11,6 +11,7 @@ installBrowserGlobals();
 let ActionDescUtil;
 let TrackerRegistry;
 let Layer;
+let Document;
 let installWebviewConfirm;
 let installToastPainter;
 
@@ -22,6 +23,7 @@ before(async () => {
   const { registerTrackers } = await import("../../../src/features/trackers/register-trackers.js");
   registerTrackers(TrackerRegistry);
   ({ Layer } = await import("../../../src/document/model/layer.js"));
+  ({ Document } = await import("../../../src/document/model/document.js"));
   ({ installWebviewConfirm, installToastPainter } = await import("../../../src/core/user-prompts.js"));
 });
 
@@ -463,6 +465,47 @@ describe("features/scripting/action-desc.js", () => {
     });
     assert.deepEqual(dispatched, ["editable-pixels"]);
   });
+
+  for (const [state, expectedMatch] of [
+    ["pixels", true], ["empty-selection", false], ["multiple-selection", false],
+    ["locked-pixels", false], ["locked-all", false], ["text", false],
+    ["smart-object", false], ["group", false], ["channel-without-layer", true],
+  ]) {
+    it(`evaluates Pixel through real document editability: ${state}`, () => {
+      const doc = new Document("condition.psd");
+      const layer = new Layer();
+      doc.layers = [layer, new Layer()];
+      doc.selectedLayerIndices = [0];
+      if (state === "empty-selection") doc.selectedLayerIndices = [];
+      if (state === "multiple-selection") doc.selectedLayerIndices = [0, 1];
+      if (state === "locked-pixels") layer.add.lspf = 1 << 1;
+      if (state === "locked-all") layer.add.lspf = 1 << 31;
+      if (state === "text") layer.add.TySh = {};
+      if (state === "smart-object") layer.add.placedData = {};
+      if (state === "group") layer.add.lsct = 1;
+      if (state === "channel-without-layer") {
+        doc.selectedLayerIndices = [];
+        doc.activeChannels = [0];
+      }
+      const actionSets = [{ name: "Set", children: [
+        { name: "Caller", children: [
+          { enabled: true, uf: "conditional", actionDescriptor: {
+            null: { v: { Cndt: "Pxel" } },
+            then: { v: [{ v: { val: "Branch" } }, { v: { val: "Set" } }] },
+          } },
+          { enabled: true, uf: "after" },
+        ] },
+        { name: "Branch", children: [{ enabled: true, uf: "editable-branch" }] },
+      ] }];
+      const dispatched = [];
+      ActionDescUtil.playActionSetSteps(doc, actionSets, "Caller", "Set", {
+        dispatch(event) { dispatched.push(event.data.uf); },
+      });
+      assert.deepEqual(dispatched, expectedMatch ? ["editable-branch", "after"] : ["after"]);
+      assert.equal(doc.layers[0], layer);
+      assert.equal(doc.history.length, 1);
+    });
+  }
 
   for (const [conditionType, matchingAdd, matchingGroup] of [
     ["Adjs", { levl: {} }, false],
