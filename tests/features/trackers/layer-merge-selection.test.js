@@ -47,6 +47,45 @@ function merge(doc, kind, alt = false) {
 }
 
 describe("selected layer merge actions", () => {
+  it("isolates a normal group from the backdrop and restores pass-through compositing on undo", () => {
+    const doc = new Document("group-blend.psd");
+    doc.width = 1;
+    doc.height = 1;
+    const backdrop = doc.newLayer();
+    backdrop.rect = new Rect(0, 0, 1, 1);
+    backdrop.buffer = new Uint8Array([200, 100, 50, 255]);
+    const end = doc.createGroupEndLayer();
+    const child = doc.newLayer();
+    child.rect = new Rect(0, 0, 1, 1);
+    child.buffer = new Uint8Array([128, 128, 128, 255]);
+    child.blendMode = "mul ";
+    const group = doc.newLayer();
+    group.add.lsct = LayerSectionType.OpenGroup;
+    group.blendMode = "pass";
+    doc.setLayers([backdrop, end, child, group]);
+    doc.selectedLayerIndices = [3];
+    doc.markDirty();
+    const passThrough = doc.getRasterData().slice();
+    assert.deepEqual([...passThrough], [100, 50, 25, 255]);
+
+    const tracker = new TrackerRegistry.LayerEffectsTracker();
+    tracker.track = () => {};
+    tracker.handleInput(
+      { actionKind: Layer.setBlendMode, layerPropertyValue: 1 },
+      {}, doc, { isPressed() { return false; } }, {},
+    );
+    assert.equal(group.blendMode, "norm");
+    const isolated = doc.getRasterData().slice();
+    assert.deepEqual([...isolated], [128, 128, 128, 255]);
+    const snapshot = doc.getLastHistoryEntry().data;
+    tracker.undo(snapshot, doc);
+    assert.equal(group.blendMode, "pass");
+    assert.deepEqual(doc.getRasterData(), passThrough);
+    tracker.redo(snapshot, doc);
+    assert.equal(group.blendMode, "norm");
+    assert.deepEqual(doc.getRasterData(), isolated);
+  });
+
   it("rasterizes a selected pass-through group with overlapping children and restores the stack on undo", () => {
     const doc = new Document("group-merge.psd");
     doc.width = 2;
