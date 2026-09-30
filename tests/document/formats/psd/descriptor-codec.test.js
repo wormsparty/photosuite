@@ -250,6 +250,34 @@ describe("document/formats/psd/descriptor-codec.js", () => {
     });
   }
 
+  for (const [t, v] of references) {
+    const named = { ...v, __name: "é表😀" };
+    const keys = Object.entries(v).filter(([key]) => key !== "val").flatMap(([, value]) => explicitKey(value));
+    const payload = t === "indx" ? u32(v.val) : t === "name" ? unicode(v.val) : [];
+    const fixture = [...ascii(t), ...unicode(named.__name), ...keys, ...payload];
+    it(`${t} imports a Unicode reference class name`, () => {
+      assert.deepEqual(DescriptorCodec.readValue(new Uint8Array(fixture), 0),
+        { t, v: named, size: fixture.length });
+    });
+    it(`${t} exports a Unicode reference class name`, () => {
+      assert.deepEqual(encodeValue({ t, v: named }), new Uint8Array(fixture));
+    });
+    it(`${t} named reference retains the following list item boundary`, () => {
+      const bytes = new Uint8Array([...ascii("obj "), ...u32(2), ...fixture, ...ascii("bool"), 1]);
+      assert.deepEqual(DescriptorCodec.readValue(bytes, 0), {
+        t: "obj ", v: [{ t, v: named }, { t: "bool", v: true }], size: bytes.length,
+      });
+    });
+  }
+
+  it("explicit empty reference names retain the existing wire encoding", () => {
+    for (const [t, v] of references) {
+      assert.deepEqual(encodeValue({ t, v: { ...v, __name: "" } }), encodeValue({ t, v }));
+      const encoded = encodeValue({ t, v: { ...v, __name: "" } });
+      assert.deepEqual(DescriptorCodec.readValue(encoded, 0), { t, v, size: encoded.length });
+    }
+  });
+
   it("ObAr reads and writes canonical short class/channel keys with doubles", () => {
     const node = { t: "ObAr", v: {
       classID: "xx", arr: [{ id: "yy", type: "UnFl", uID: "#Pxl", arr: [1.25, -2] }],

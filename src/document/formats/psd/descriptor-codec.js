@@ -228,11 +228,8 @@ function readValue(data, pos, debug, depth) {
       var fieldDefs = OSTYPE_FIELDS[typeCode];
       var refName = BinaryUtils.readUnicodeName(data, pos);
       pos += 4 + BinaryUtils.readUint32BE(data, pos) * 2;
-      if (refName.length != 0) {
-        console.log(typeCode, refName);
-        throw "psd-descriptor: unexpected reference name";
-      }
       result.v = {};
+      if (refName !== "") result.v.__name = refName;
       for (var i = 0; i < fieldDefs.length; i++) {
         var refFieldVal = readOSKey(data, pos);
         pos += keySize(data, pos);
@@ -422,8 +419,9 @@ function writeValue(buf, pos, node) {
     case "indx":
     case "name":
       var fieldDefs = OSTYPE_FIELDS[typeCode];
-      BinaryUtils.writeSize(buf, pos, 1);
-      pos += 6;
+      var refName = value.__name == null ? "" : value.__name;
+      BinaryUtils.writeUnicodeString(buf, pos, refName + "\0");
+      pos += 4 + (refName.length + 1) * 2;
       for (var i = 0; i < fieldDefs.length; i++) {
         var refFieldVal = value[fieldDefs[i]];
         writeOSKey(buf, pos, refFieldVal);
