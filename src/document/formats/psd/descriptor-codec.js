@@ -358,7 +358,7 @@ function writeValue(buf, pos, node) {
       pos += value.length;
       break;
     case "ObAr":
-      BinaryUtils.writeSize(buf, pos, value.arr[0].arr.length);
+      BinaryUtils.writeSize(buf, pos, value.arr.length === 0 ? 0 : value.arr[0].arr.length);
       pos += 4;
       BinaryUtils.writeUnicodeString(buf, pos, "\0");
       pos += 6;
