@@ -60,6 +60,10 @@ const WRITABLE_TYPES = new Set([
   "Pth ", "Clss", "type", "rele", "prop", "Enmr", "indx", "name", "alis",
 ]);
 
+function requireObjectArrayChannelType(type) {
+  if (type !== "UnFl") throw new Error("psd-descriptor: unsupported object-array channel type " + type);
+}
+
 /**
  * Four-char keys that are nonetheless length-prefixed on the wire (their
  * meaning would otherwise be ambiguous with padded short keys).
@@ -285,6 +289,7 @@ function readObjectArray(data, pos, result) {
     var chID = readOSKey(data, pos);
     pos += keySize(data, pos);
     var chType = BinaryUtils.readString(data, pos, 4);
+    requireObjectArrayChannelType(chType);
     pos += 4;
     var chUID = BinaryUtils.readString(data, pos, 4);
     pos += 4;
@@ -364,6 +369,8 @@ function writeValue(buf, pos, node) {
       pos += value.length;
       break;
     case "ObAr":
+      // This codec implements the unit-float list layout, not arbitrary OSTypes.
+      for (var channel of value.arr) requireObjectArrayChannelType(channel.type);
       var objectCount = value.objectCount === undefined
         ? (value.arr.length === 0 ? 0 : value.arr[0].arr.length) : value.objectCount;
       if (!Number.isInteger(objectCount) || objectCount < 0 || objectCount > 0xffffffff) {

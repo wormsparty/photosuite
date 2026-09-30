@@ -59,6 +59,31 @@ describe("document/formats/psd/descriptor-codec.js", () => {
     });
   });
 
+  describe("object-array channel types", () => {
+    for (const type of ["long", "doub", "UntF", "zzzz"]) {
+      const fixture = [
+        ...ascii("ObAr"), ...u32(1), ...unicode(""), ...explicitKey("xx"), ...u32(1),
+        ...explicitKey("yy"), ...ascii(type + "#Pxl"), ...u32(1), ...float64(1.25),
+      ];
+      it(`rejects unsupported ${type} channel on import`, () => {
+        assert.throws(() => DescriptorCodec.readValue(new Uint8Array(fixture), 0), /unsupported object-array channel type/);
+      });
+      it(`rejects unsupported ${type} channel on export`, () => {
+        assert.throws(() => encodeValue({ t: "ObAr", v: {
+          classID: "xx", arr: [{ id: "yy", type, uID: "#Pxl", arr: [1.25] }],
+        } }), /unsupported object-array channel type/);
+      });
+    }
+    it("validates every exported channel including a later empty channel", () => {
+      assert.throws(() => encodeValue({ t: "ObAr", v: {
+        classID: "xx", arr: [
+          { id: "Hrzn", type: "UnFl", uID: "#Pxl", arr: [1] },
+          { id: "Vrtc", type: "long", uID: "#Pxl", arr: [] },
+        ],
+      } }), /unsupported object-array channel type/);
+    });
+  });
+
   it("readOSKey reads a 4-char padded key and a length-prefixed key", () => {
     // len=0 → 4-char padded "Rd  "
     const padded = new Uint8Array([0, 0, 0, 0, ...ascii("Rd  ")]);
