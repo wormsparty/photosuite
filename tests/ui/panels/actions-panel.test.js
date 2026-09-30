@@ -14,10 +14,12 @@ let ActionsPanel;
 let ActionsListItem;
 let Locale;
 let PopupTypes;
+let ActionParser;
 
 before(async () => {
   ({ Locale } = await import("../../../src/core/i18n/locale.js"));
   ({ PopupTypes } = await import("../../../src/ui/config/popup-types.js"));
+  ({ ActionParser } = await import("../../../src/features/scripting/action-file.js"));
   Locale.get = (key) => (typeof key === "string" ? key : String(key));
   ({ ActionsPanel, ActionsListItem } = await import(
     "../../../src/ui/panels/actions-panel.js"
@@ -94,6 +96,65 @@ describe("ui/panels/actions-panel.js", () => {
     assert.equal(events.length, 1);
     assert.equal(events[0].data.popupTypeId, PopupTypes.ACTIONS);
     assert.equal(events[0].data.actionSetIndex, 0);
+  });
+
+  it("renamed selected set and action survive export and import", () => {
+    const actionSets = [
+      { name: "Other", expanded: true, children: [] },
+      {
+        name: "Original Set", expanded: true,
+        children: [{
+          index: 0, shift: false, commandKeyEnabled: false, color: 0,
+          name: "Original Action", expanded: true,
+          children: [{
+            expanded: false, enabled: false, dialogOptionsEnabled: false,
+            dialogOptions: 0, uf: "set", eventClassName: "",
+            actionDescriptor: { classID: "null" },
+          }],
+        }],
+      },
+    ];
+    const panel = Object.create(ActionsPanel.prototype);
+    panel.doc = { actionSets, recordingActionSet: null };
+    panel.selectedPath = [1, 0];
+    panel.redraw = () => {};
+    panel.items = [{}, {}, {}, {}, {}, {}];
+    const events = [];
+    panel.dispatch = (event) => events.push(event.data);
+
+    panel.onItemSelect({ data: {
+      rowAction: "nchange", treePath: [1], newName: "Renamed Set",
+    } });
+    panel.onItemSelect({ data: {
+      rowAction: "nchange", treePath: [1, 0], newName: "Renamed Action",
+    } });
+    panel.onFooterClick({ currentTarget: panel.items[5] });
+
+    assert.equal(events.length, 1);
+    assert.equal(events[0].popupTypeId, PopupTypes.ACTIONS);
+    assert.equal(events[0].actionSetIndex, 1);
+    const imported = ActionParser.parse(
+      ActionParser.serialize(actionSets[events[0].actionSetIndex]),
+    );
+    assert.equal(imported.length, 1);
+    assert.equal(imported[0].name, "Renamed Set");
+    assert.equal(imported[0].children[0].name, "Renamed Action");
+    assert.deepEqual(imported[0].children[0].children, [{
+      expanded: false, enabled: false, dialogOptionsEnabled: false,
+      dialogOptions: 0, uf: "set", eventClassName: "",
+      actionDescriptor: { classID: "null" },
+    }]);
+    assert.equal(actionSets[0].name, "Other");
+
+    const importedPanel = Object.create(ActionsPanel.prototype);
+    importedPanel.doc = { actionSets: imported, recordingActionSet: null };
+    importedPanel.selectedPath = [0, 0];
+    const replayEvents = [];
+    importedPanel.dispatch = (event) => replayEvents.push(event.data);
+    importedPanel.playSelectedAction();
+    assert.deepEqual(replayEvents[0].recordedActionPair, [
+      "Renamed Action", "Renamed Set",
+    ]);
   });
 
   it("Play with an action set but no selected row does not dispatch or throw", () => {
