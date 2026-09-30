@@ -248,7 +248,7 @@ function toggleRecording(panel, doc, actionSets, selected) {
     showToast("Create an Action Set first.");
     return;
   }
-  if (selected.length < 2) {
+  if (!isSelectedAction(actionSets, selected)) {
     showToast("Select a target action first.");
     return;
   }
@@ -292,6 +292,10 @@ function createSetOrAction(panel, actionSets, selected, btnIndex) {
     actionSets.push(newSet);
   }
   if (btnIndex == FOOTER_NEW_ACTION) {
+    if (!isSelectedSet(actionSets, selected)) {
+      showToast("Select an Action Set first.");
+      return;
+    }
     const actionsList = actionSets[selected[0]].children;
     selected = [selected[0], actionsList.length];
     actionsList.push(createEmptyAction(actionsList.length));
@@ -306,7 +310,25 @@ function siblingListForPath(actionSets, selected) {
   return actionSets[selected[0]].children[selected[1]].children;
 }
 
+function isSelectedSet(actionSets, selected) {
+  return Array.isArray(selected) &&
+    Number.isInteger(selected[0]) &&
+    selected[0] >= 0 && selected[0] < actionSets.length;
+}
+
+function isSelectedAction(actionSets, selected) {
+  return isSelectedSet(actionSets, selected) &&
+    Number.isInteger(selected[1]) &&
+    selected[1] >= 0 &&
+    selected[1] < actionSets[selected[0]].children.length;
+}
+
 function deleteSelectedNode(panel, actionSets, selected) {
+  if (!isSelectedSet(actionSets, selected) ||
+      (selected.length > 1 && !isSelectedAction(actionSets, selected))) {
+    showToast("Select an Action first.");
+    return;
+  }
   const siblings = siblingListForPath(actionSets, selected);
   const lastIdx = selected.length - 1;
   siblings.splice(selected[lastIdx], 1);
@@ -319,6 +341,10 @@ function deleteSelectedNode(panel, actionSets, selected) {
 function exportSelectedActionSet(panel, actionSets, selected) {
   if (actionSets.length == 0) {
     showToast("No Actions Present.");
+    return;
+  }
+  if (!isSelectedSet(actionSets, selected)) {
+    showToast("Select an Action Set first.");
     return;
   }
   const exportEvt = new AppEvent(EventType.uiDispatch, true);

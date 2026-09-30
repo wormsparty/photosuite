@@ -122,4 +122,29 @@ describe("ui/panels/actions-panel.js", () => {
     assert.equal(dispatched.length, 1);
     assert.deepEqual(dispatched[0].recordedActionPair, ["Action", "Set"]);
   });
+
+  for (const [label, buttonIndex] of [["Record", 0], ["New Action", 3], ["Delete", 4], ["Export", 5]]) {
+    it(`${label} leaves an existing set untouched before row selection`, () => {
+      const panel = Object.create(ActionsPanel.prototype);
+      const actionSets = [{ name: "Set", children: [{ name: "Action", children: [] }] }];
+      panel.doc = { actionSets, recordingActionSet: null };
+      panel.selectedPath = "topMenu.file";
+      panel.recordGlyph = "record";
+      panel.stopGlyph = "stop";
+      const labels = [];
+      const dispatched = [];
+      panel.items = [
+        { setLabel(value) { labels.push(value); } },
+        {}, {}, {}, {}, {},
+      ];
+      panel.redraw = () => {};
+      panel.dispatch = (event) => dispatched.push(event.data);
+
+      assert.doesNotThrow(() => panel.onFooterClick({ currentTarget: panel.items[buttonIndex] }));
+      assert.deepEqual(actionSets, [{ name: "Set", children: [{ name: "Action", children: [] }] }]);
+      assert.equal(panel.doc.recordingActionSet, null);
+      assert.deepEqual(labels, []);
+      assert.deepEqual(dispatched, []);
+    });
+  }
 });
