@@ -9,11 +9,17 @@ import { installBrowserGlobals } from "../../helpers/stub-browser-globals.js";
 installBrowserGlobals();
 
 let ActionDescUtil;
+let TrackerRegistry;
+let Layer;
 
 before(async () => {
   await import("../../../src/features/filters/filter-registry.js");
   await import("../../../src/features/filters/gallery/gallery-filter-defs.js");
   ({ ActionDescUtil } = await import("../../../src/features/scripting/action-desc.js"));
+  ({ TrackerRegistry } = await import("../../../src/features/trackers/tracker-registry.js"));
+  const { registerTrackers } = await import("../../../src/features/trackers/register-trackers.js");
+  registerTrackers(TrackerRegistry);
+  ({ Layer } = await import("../../../src/document/model/layer.js"));
 });
 
 describe("features/scripting/action-desc.js", () => {
@@ -99,5 +105,54 @@ describe("features/scripting/action-desc.js", () => {
       ActionDescUtil.resolveLayerIndexFromRef(doc, { t: "prop", v: { keyID: "Bckg" } }),
       0,
     );
+  });
+
+  it("replays recorded Pass Through and Multiply group modes with Undo and Redo", () => {
+    const group = {
+      blendMode: "norm",
+      renderCache: { dirty: false },
+      isGroup() { return true; },
+      convertFromBackground() {},
+      markDirty() {},
+      invalidate() {},
+    };
+    const doc = {
+      layers: [group],
+      selectedLayerIndices: [0],
+      history: [],
+      historyIndex: -1,
+      pushHistory(entry) {
+        this.history.push(entry);
+        this.historyIndex = this.history.length - 1;
+      },
+      getLastHistoryEntry() { return this.history.at(-1); },
+      markDirty() {},
+    };
+    const tracker = new TrackerRegistry.LayerEffectsTracker();
+    tracker.track = () => {};
+    const dispatched = [];
+    const controller = {
+      dispatch(event) {
+        dispatched.push(event.data);
+        tracker.handleInput(event.data, {}, doc, { isPressed() { return false; } }, {});
+      },
+    };
+    for (const [psdMode, wireMode, menuIndex] of [
+      ["passThrough", "pass", 0],
+      ["Mltp", "mul ", 4],
+    ]) {
+      const step = ActionDescUtil.buildSetLayerPropertyAction("Md", {
+        t: "enum", v: { blendMode: psdMode },
+      });
+      ActionDescUtil.dispatchRecordedAction(step, controller, {}, doc);
+      assert.equal(dispatched.at(-1).actionKind, Layer.setBlendMode);
+      assert.equal(dispatched.at(-1).layerPropertyValue, menuIndex);
+      assert.equal(group.blendMode, wireMode);
+      const snapshot = doc.getLastHistoryEntry().data;
+      tracker.undo(snapshot, doc);
+      assert.equal(group.blendMode, psdMode === "passThrough" ? "norm" : "pass");
+      tracker.redo(snapshot, doc);
+      assert.equal(group.blendMode, wireMode);
+    }
   });
 });

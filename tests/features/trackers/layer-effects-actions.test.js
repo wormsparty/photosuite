@@ -317,4 +317,34 @@ describe("features/trackers/layer-effects-actions.js", () => {
     assert.equal(group.blendMode, "mul ");
     assert.equal(tracked[1].actionDescriptor.T.v.Md.v.blendMode, "Mltp");
   });
+
+  it("round-trips several group modes through history and recorded descriptors", () => {
+    const cases = [
+      [0, "pass", "passThrough"],
+      [1, "norm", "Nrml"],
+      [4, "mul ", "Mltp"],
+      [9, "scrn", "Scrn"],
+      [13, "over", "Ovrl"],
+      [20, "diff", "Dfrn"],
+      [27, "lum ", "Lmns"],
+    ];
+    for (const [menuIndex, wireMode, psdMode] of cases) {
+      const tracker = new TrackerRegistry.LayerEffectsTracker();
+      const recorded = [];
+      tracker.track = (step) => recorded.push(step);
+      const group = makeLayer({ blendMode: "norm", isGroup: () => true });
+      const doc = makeDoc([group]);
+      tracker.handleInput(
+        { actionKind: Layer.setBlendMode, layerPropertyValue: menuIndex },
+        {}, doc, idleKeyboard(), {},
+      );
+      assert.equal(group.blendMode, wireMode, `menu index ${menuIndex}`);
+      assert.equal(recorded[0].actionDescriptor.T.v.Md.v.blendMode, psdMode);
+      const snapshot = doc.getLastHistoryEntry().data;
+      tracker.undo(snapshot, doc);
+      assert.equal(group.blendMode, "norm");
+      tracker.redo(snapshot, doc);
+      assert.equal(group.blendMode, wireMode);
+    }
+  });
 });
