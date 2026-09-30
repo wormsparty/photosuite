@@ -64,6 +64,12 @@ function requireObjectArrayChannelType(type) {
   if (type !== "UnFl") throw new Error("psd-descriptor: unsupported object-array channel type " + type);
 }
 
+function requireIntegerRange(value, min, max) {
+  if (!Number.isInteger(value) || value < min || value > max) {
+    throw new Error("psd-descriptor: integer out of range");
+  }
+}
+
 /**
  * Four-char keys that are nonetheless length-prefixed on the wire (their
  * meaning would otherwise be ambiguous with padded short keys).
@@ -315,6 +321,11 @@ function writeValue(buf, pos, node) {
   var typeCode = node.t;
   var value = node.v;
   if (!WRITABLE_TYPES.has(typeCode)) throw new Error("psd-descriptor: unsupported OSType " + typeCode);
+  // Validate fixed-width fields before writing: coercion or a short/long tag
+  // would corrupt the value or shift the following node's byte boundary.
+  if (typeCode === "long") requireIntegerRange(value, -0x80000000, 0x7fffffff);
+  if (typeCode === "rele") requireIntegerRange(value.val, -0x80000000, 0x7fffffff);
+  if (typeCode === "indx") requireIntegerRange(value.val, 0, 0xffffffff);
   BinaryUtils.writeAscii(buf, pos, typeCode);
   pos += 4;
   switch (typeCode) {

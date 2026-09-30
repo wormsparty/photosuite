@@ -41,6 +41,26 @@ const assertValueFixture = (node, fixture) => {
 };
 
 describe("document/formats/psd/descriptor-codec.js", () => {
+  describe("32-bit export bounds", () => {
+    for (const type of ["long", "rele", "indx"]) {
+      const wrap = (val) => ({ t: type, v: type === "long" ? val : { classID: "Lyr", val } });
+      const limits = type === "indx" ? [0, 0xffffffff] : [-0x80000000, 0x7fffffff];
+      for (const value of [limits[0] - 1, limits[1] + 1, 1.5, NaN, Infinity, "42", null, true]) {
+        it(`${type} rejects invalid integer ${String(value)}`, () => {
+          const buf = { data: new Uint8Array(1024).fill(165), ensureCapacity() {} };
+          assert.throws(() => DescriptorCodec.writeValue(buf, 0, wrap(value)), /integer.*range/);
+          assert.ok(buf.data.every((byte) => byte === 165), "invalid integer leaves buffer unchanged");
+        });
+      }
+      for (const value of limits) {
+        it(`${type} retains boundary ${value}`, () => {
+          const header = type === "long" ? [] : [...unicode(""), ...u32(0), ...ascii("Lyr ")];
+          assertValueFixture(wrap(value), [...ascii(type), ...header, ...u32(value)]);
+        });
+      }
+    }
+  });
+
   describe("unsupported descriptor types", () => {
     for (const type of ["zzzz", "UnFl", "", "longer", undefined]) {
       it(`rejects unsupported writer type ${String(type)}`, () => {
