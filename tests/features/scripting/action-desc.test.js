@@ -194,6 +194,122 @@ describe("features/scripting/action-desc.js", () => {
     assert.deepEqual(dispatched, ["unique-step"]);
   });
 
+  it("stops a direct nested Play self-reference and continues the caller", () => {
+    const playSelf = {
+      enabled: true,
+      uf: "play",
+      actionDescriptor: { null: { v: [
+        { v: { val: "Caller" } }, { v: { val: "Set" } },
+      ] } },
+    };
+    const actionSets = [{ name: "Set", children: [{ name: "Caller", children: [
+      { enabled: true, uf: "before" }, playSelf, { enabled: true, uf: "after" },
+    ] }] }];
+    const dispatched = [];
+    let nestedCalls = 0;
+    const dispatcher = {
+      dispatch(event) {
+        if (event.data.dispatchKind) {
+          nestedCalls++;
+          const [name, set] = event.data.recordedActionPair;
+          ActionDescUtil.playActionSetSteps({}, actionSets, name, set, this);
+        } else dispatched.push(event.data.uf);
+      },
+    };
+
+    ActionDescUtil.playActionSetSteps({}, actionSets, "Caller", "Set", dispatcher);
+    assert.equal(nestedCalls, 1);
+    assert.deepEqual(dispatched, ["before", "after"]);
+  });
+
+  it("stops a two-action nested Play cycle and preserves remaining steps", () => {
+    const play = (name) => ({
+      enabled: true,
+      uf: "play",
+      actionDescriptor: { null: { v: [
+        { v: { val: name } }, { v: { val: "Set" } },
+      ] } },
+    });
+    const actionSets = [{ name: "Set", children: [
+      { name: "A", children: [
+        { enabled: true, uf: "a-before" }, play("B"), { enabled: true, uf: "a-after" },
+      ] },
+      { name: "B", children: [
+        { enabled: true, uf: "b-before" }, play("A"), { enabled: true, uf: "b-after" },
+      ] },
+    ] }];
+    const dispatched = [];
+    let nestedCalls = 0;
+    const dispatcher = {
+      dispatch(event) {
+        if (event.data.dispatchKind) {
+          nestedCalls++;
+          const [name, set] = event.data.recordedActionPair;
+          ActionDescUtil.playActionSetSteps({}, actionSets, name, set, this);
+        } else dispatched.push(event.data.uf);
+      },
+    };
+
+    ActionDescUtil.playActionSetSteps({}, actionSets, "A", "Set", dispatcher);
+    assert.equal(nestedCalls, 2);
+    assert.deepEqual(dispatched, ["a-before", "b-before", "b-after", "a-after"]);
+  });
+
+  it("plays an acyclic nested chain in order", () => {
+    const play = (name) => ({
+      enabled: true,
+      uf: "play",
+      actionDescriptor: { null: { v: [
+        { v: { val: name } }, { v: { val: "Set" } },
+      ] } },
+    });
+    const actionSets = [{ name: "Set", children: [
+      { name: "A", children: [{ enabled: true, uf: "a-before" }, play("B"), { enabled: true, uf: "a-after" }] },
+      { name: "B", children: [{ enabled: true, uf: "b-before" }, play("C"), { enabled: true, uf: "b-after" }] },
+      { name: "C", children: [{ enabled: true, uf: "c" }] },
+    ] }];
+    const dispatched = [];
+    const dispatcher = {
+      dispatch(event) {
+        if (event.data.dispatchKind) {
+          const [name, set] = event.data.recordedActionPair;
+          ActionDescUtil.playActionSetSteps({}, actionSets, name, set, this);
+        } else dispatched.push(event.data.uf);
+      },
+    };
+
+    ActionDescUtil.playActionSetSteps({}, actionSets, "A", "Set", dispatcher);
+    assert.deepEqual(dispatched, ["a-before", "b-before", "c", "b-after", "a-after"]);
+  });
+
+  it("bounds conditional self-expansion and resets the limit for a later playback", () => {
+    const actionSets = [{ name: "Set", children: [
+      { name: "Loop", children: [{
+        enabled: true,
+        uf: "conditional",
+        actionDescriptor: {
+          null: { v: { Cndt: "Pxel" } },
+          then: { v: [{ v: { val: "Loop" } }, { v: { val: "Set" } }] },
+        },
+      }] },
+      { name: "Later", children: [{ enabled: true, uf: "later-step" }] },
+    ] }];
+    let conditionChecks = 0;
+    const doc = {
+      layers: [{}],
+      selectedLayerIndices: [0],
+      ensureLayerEditableForTools() { conditionChecks++; return true; },
+    };
+    const dispatched = [];
+    const dispatcher = { dispatch(event) { dispatched.push(event.data.uf); } };
+
+    assert.doesNotThrow(() => ActionDescUtil.playActionSetSteps(doc, actionSets, "Loop", "Set", dispatcher));
+    assert.equal(conditionChecks, 1024);
+    assert.deepEqual(dispatched, []);
+    ActionDescUtil.playActionSetSteps(doc, actionSets, "Later", "Set", dispatcher);
+    assert.deepEqual(dispatched, ["later-step"]);
+  });
+
   it("plays only the selected duplicate-name action and skips its disabled steps", () => {
     const actionSets = [
       { name: "Set", children: [

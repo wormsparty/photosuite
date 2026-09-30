@@ -146,68 +146,83 @@ ActionDescUtil.buildSetLayerPropertyAction = function(propertyKey, propertyValue
     }
   };
 };
+// A recorded action can invoke another action synchronously. Share the limit
+// across that entire dispatch chain, including conditional step expansion.
+const activeActionPlaybacks = new WeakMap();
+const maxRecordedPlaybackSteps = 1024;
+const maxNestedActionDepth = 32;
 ActionDescUtil.playActionSetSteps = function(doc, actionSets, setIndex, stepIndex, dispatcher, actionPath) {
   const historyEvent = new AppEvent(EventType.historyGrouped, true);
   const stepStack = [];
-  let stepCount = 0;
+  let action;
   if (actionPath === undefined) {
-    ActionDescUtil.collectActionStepsFromSet(actionSets, setIndex, stepIndex, stepStack);
+    action = ActionDescUtil.findActionInSet(actionSets, setIndex, stepIndex);
   } else {
     const [setPosition, actionPosition] = Array.isArray(actionPath) ? actionPath : [];
-    const action = Number.isInteger(setPosition) && Number.isInteger(actionPosition) &&
+    action = Number.isInteger(setPosition) && Number.isInteger(actionPosition) &&
       setPosition >= 0 && actionPosition >= 0 &&
       actionSets[setPosition]?.children?.[actionPosition];
-    if (action?.name === setIndex && actionSets[setPosition].name === stepIndex) {
-      const steps = action.children;
-      for (let pushIdx = steps.length - 1; pushIdx >= 0; pushIdx--) stepStack.push(steps[pushIdx]);
-    }
+    if (action?.name !== setIndex || actionSets[setPosition].name !== stepIndex) action = undefined;
   }
-  while (stepStack.length != 0) {
-    const step = stepStack.pop();
-    stepCount++;
-    if (!step.enabled) continue;
-    if (step.uf == "conditional") {
-      const activeLayer = doc.layers[doc.selectedLayerIndices[0]];
-      const conditionType = step.actionDescriptor.null.v.Cndt;
-      const conditionMet = evaluateActionCondition(doc, conditionType, activeLayer);
-      const thenBranch = step.actionDescriptor.then.v;
-      if (conditionMet) ActionDescUtil.collectActionStepsFromSet(actionSets, thenBranch[0].v.val, thenBranch[1].v.val, stepStack)
-    } else if (step.uf == "stop") {
-      if (step.actionDescriptor.Cntn && step.actionDescriptor.Cntn.v == true) confirmUser(step.actionDescriptor.Msge.v);
-      else {
-        showToast(step.actionDescriptor.Msge.v);
-        break
+  if (!action || !dispatcher) return;
+  const existingPlayback = activeActionPlaybacks.get(dispatcher);
+  const playback = existingPlayback || { active: new Set(), remaining: maxRecordedPlaybackSteps };
+  if (playback.active.has(action) || playback.active.size >= maxNestedActionDepth || playback.remaining <= 0) return;
+  if (!existingPlayback) activeActionPlaybacks.set(dispatcher, playback);
+  playback.active.add(action);
+  try {
+    for (let pushIdx = action.children.length - 1; pushIdx >= 0; pushIdx--) stepStack.push(action.children[pushIdx]);
+    while (stepStack.length != 0 && playback.remaining > 0) {
+      const step = stepStack.pop();
+      playback.remaining--;
+      if (!step.enabled) continue;
+      if (step.uf == "conditional") {
+        const activeLayer = doc.layers[doc.selectedLayerIndices[0]];
+        const conditionType = step.actionDescriptor.null.v.Cndt;
+        const conditionMet = evaluateActionCondition(doc, conditionType, activeLayer);
+        const thenBranch = step.actionDescriptor.then.v;
+        if (conditionMet) ActionDescUtil.collectActionStepsFromSet(actionSets, thenBranch[0].v.val, thenBranch[1].v.val, stepStack)
+      } else if (step.uf == "stop") {
+        if (step.actionDescriptor.Cntn && step.actionDescriptor.Cntn.v == true) confirmUser(step.actionDescriptor.Msge.v);
+        else {
+          showToast(step.actionDescriptor.Msge.v);
+          break
+        }
+      } else if (step.uf == "play") {
+        const playRefs = step.actionDescriptor.null.v;
+        const uiDispatchEvent = new AppEvent(EventType.uiDispatch, true);
+        uiDispatchEvent.data = {
+          dispatchKind: UiCommand.replayRecordedActionPair,
+          recordedActionPair: [playRefs[0].v.val, playRefs[1].v.val]
+        };
+        dispatcher.dispatch(uiDispatchEvent)
+      } else {
+        historyEvent.data = {
+          uf: step.uf,
+          actionDescriptor: step.actionDescriptor
+        };
+        dispatcher.dispatch(historyEvent)
       }
-    } else if (step.uf == "play") {
-      const playRefs = step.actionDescriptor.null.v;
-      const uiDispatchEvent = new AppEvent(EventType.uiDispatch, true);
-      uiDispatchEvent.data = {
-        dispatchKind: UiCommand.replayRecordedActionPair,
-        recordedActionPair: [playRefs[0].v.val, playRefs[1].v.val]
-      };
-      dispatcher.dispatch(uiDispatchEvent)
-    } else {
-      historyEvent.data = {
-        uf: step.uf,
-        actionDescriptor: step.actionDescriptor
-      };
-      dispatcher.dispatch(historyEvent)
     }
+  } finally {
+    playback.active.delete(action);
+    if (!existingPlayback) activeActionPlaybacks.delete(dispatcher);
   }
 };
-ActionDescUtil.collectActionStepsFromSet = function(actionSets, setIndex, stepIndex, outStack) {
-  let steps;
-  let matchCount = 0;
-  for (let setIdx = 0; setIdx < actionSets.length; setIdx++) {
-    if (actionSets[setIdx].name != stepIndex) continue;
-    const actions = actionSets[setIdx].children;
-    for (let actionIdx = 0; actionIdx < actions.length; actionIdx++) {
-      if (actions[actionIdx].name != setIndex) continue;
-      matchCount++;
-      if (matchCount > 1) return 0;
-      steps = actions[actionIdx].children;
+ActionDescUtil.findActionInSet = function(actionSets, actionName, setName) {
+  let action;
+  for (const set of actionSets) {
+    if (set.name != setName) continue;
+    for (const candidate of set.children) {
+      if (candidate.name != actionName) continue;
+      if (action) return undefined;
+      action = candidate;
     }
   }
+  return action;
+};
+ActionDescUtil.collectActionStepsFromSet = function(actionSets, setIndex, stepIndex, outStack) {
+  const steps = ActionDescUtil.findActionInSet(actionSets, setIndex, stepIndex)?.children;
   if (!steps) return 0;
   let stepCount = steps.length;
   for (let pushIdx = 0; pushIdx < stepCount; pushIdx++) outStack.push(steps[stepCount - 1 - pushIdx])
