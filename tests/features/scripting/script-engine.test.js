@@ -90,6 +90,21 @@ describe("features/scripting/script-engine.js", () => {
     );
   });
 
+  it("doAction forwards its exact name pair for recorded playback", () => {
+    const dispatched = [];
+    const host = {
+      getCurrentDoc: () => null,
+      openDocs: [],
+      dispatch(event) { dispatched.push({ ...event.data }); },
+    };
+    ScriptEngine.ScriptEval.invokeScriptObjectMethod(
+      { o: "Application", value: null }, "doAction", ["Action", "Set"], host, {},
+    );
+    assert.equal(dispatched.length, 1);
+    assert.deepEqual(dispatched[0].recordedActionPair, ["Action", "Set"]);
+    assert.equal(dispatched[0].recordedActionPath, undefined);
+  });
+
   it("a script sees only the names bound in the script host context", () => {
     // The interpreter resolves free identifiers through script-host-context.js,
     // so the page and the module graph are out of a script's reach: `eval` and

@@ -197,12 +197,15 @@ ActionDescUtil.playActionSetSteps = function(doc, actionSets, setIndex, stepInde
 };
 ActionDescUtil.collectActionStepsFromSet = function(actionSets, setIndex, stepIndex, outStack) {
   let steps;
+  let matchCount = 0;
   for (let setIdx = 0; setIdx < actionSets.length; setIdx++) {
     if (actionSets[setIdx].name != stepIndex) continue;
     const actions = actionSets[setIdx].children;
     for (let actionIdx = 0; actionIdx < actions.length; actionIdx++) {
       if (actions[actionIdx].name != setIndex) continue;
-      steps = actions[actionIdx].children
+      matchCount++;
+      if (matchCount > 1) return 0;
+      steps = actions[actionIdx].children;
     }
   }
   if (!steps) return 0;

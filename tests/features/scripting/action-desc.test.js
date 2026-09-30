@@ -142,6 +142,58 @@ describe("features/scripting/action-desc.js", () => {
     assert.deepEqual(dispatched, []);
   });
 
+  it("does not choose an arbitrary action when a scripted name pair is ambiguous", () => {
+    const actionSets = [
+      { name: "Set", children: [
+        { name: "Action", children: [{ enabled: true, uf: "first" }] },
+        { name: "Action", children: [{ enabled: true, uf: "second" }] },
+      ] },
+      { name: "Set", children: [
+        { name: "Action", children: [{ enabled: true, uf: "third" }] },
+      ] },
+    ];
+    const dispatched = [];
+    ActionDescUtil.playActionSetSteps({}, actionSets, "Action", "Set", {
+      dispatch(event) { dispatched.push(event.data.uf); },
+    });
+    assert.deepEqual(dispatched, []);
+  });
+
+  it("a nested Play dispatches a unique target and leaves an ambiguous target untouched", () => {
+    const playStep = (actionName, setName) => ({
+      enabled: true,
+      uf: "play",
+      actionDescriptor: { null: { v: [
+        { v: { val: actionName } }, { v: { val: setName } },
+      ] } },
+    });
+    const actionSets = [
+      { name: "Set", children: [
+        { name: "Caller", children: [
+          playStep("Unique", "Set"),
+          playStep("Duplicate", "Set"),
+          playStep("Removed", "Set"),
+        ] },
+        { name: "Unique", children: [{ enabled: true, uf: "unique-step" }] },
+        { name: "Duplicate", children: [{ enabled: true, uf: "wrong-first" }] },
+        { name: "Duplicate", children: [{ enabled: true, uf: "wrong-last" }] },
+      ] },
+    ];
+    const dispatched = [];
+    const dispatcher = {
+      dispatch(event) {
+        if (event.data.dispatchKind) {
+          const [actionName, setName] = event.data.recordedActionPair;
+          ActionDescUtil.playActionSetSteps({}, actionSets, actionName, setName, this);
+        } else {
+          dispatched.push(event.data.uf);
+        }
+      },
+    };
+    ActionDescUtil.playActionSetSteps({}, actionSets, "Caller", "Set", dispatcher);
+    assert.deepEqual(dispatched, ["unique-step"]);
+  });
+
   it("plays only the selected duplicate-name action and skips its disabled steps", () => {
     const actionSets = [
       { name: "Set", children: [
