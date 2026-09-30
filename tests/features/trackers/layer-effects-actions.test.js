@@ -145,6 +145,22 @@ describe("features/trackers/layer-effects-actions.js", () => {
     assert.equal(layer.add.lspf, 0);
   });
 
+  it("toggleLayerLocks preserves unrelated bits across a multi-layer undo and redo", () => {
+    const tracker = new TrackerRegistry.LayerEffectsTracker();
+    const first = makeLayer({ add: { lspf: 1 << 4, lsct: 0 } });
+    const second = makeLayer({ add: { lspf: (1 << 4) | (1 << 2), lsct: 0 } });
+    const doc = makeDoc([first, second], { selectedLayerIndices: [0, 1] });
+    tracker.handleInput(
+      { actionKind: Layer.toggleLayerLocks, layerPropertyValue: [[true, false], [2, 1]] },
+      {}, doc, idleKeyboard(), {},
+    );
+    assert.deepEqual([first.add.lspf, second.add.lspf], [20, 20]);
+    tracker.undo(doc.history[0].data, doc);
+    assert.deepEqual([first.add.lspf, second.add.lspf], [16, 20]);
+    tracker.redo(doc.history[0].data, doc);
+    assert.deepEqual([first.add.lspf, second.add.lspf], [20, 20]);
+  });
+
   it("renameLayer history tuple is [index, oldName, newName, lnsr, null]", () => {
     const tracker = new TrackerRegistry.LayerEffectsTracker();
     tracker.track = () => {};
@@ -179,5 +195,21 @@ describe("features/trackers/layer-effects-actions.js", () => {
     assert.equal(layer.blendMode, "norm");
     tracker.undo(doc.history[0].data, doc);
     assert.equal(layer.blendMode, "norm");
+  });
+
+  it("setBlendMode applies pass-through to a group and restores its prior mode", () => {
+    const tracker = new TrackerRegistry.LayerEffectsTracker();
+    tracker.track = () => {};
+    const group = makeLayer({ blendMode: "norm", isGroup: () => true });
+    const doc = makeDoc([group]);
+    tracker.handleInput(
+      { actionKind: Layer.setBlendMode, layerPropertyValue: 0 },
+      {}, doc, idleKeyboard(), {},
+    );
+    assert.equal(group.blendMode, "pass");
+    tracker.undo(doc.history[0].data, doc);
+    assert.equal(group.blendMode, "norm");
+    tracker.redo(doc.history[0].data, doc);
+    assert.equal(group.blendMode, "pass");
   });
 });

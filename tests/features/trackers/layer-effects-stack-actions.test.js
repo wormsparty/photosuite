@@ -29,6 +29,9 @@ function makeLayer(name) {
     getName() {
       return this.name;
     },
+    isGroup() {
+      return false;
+    },
   };
 }
 
@@ -58,6 +61,9 @@ function makeDoc(layers) {
     resolveLayerSelection() {
       return this.selectedLayerIndices.slice();
     },
+    collectGroupLayers(index) {
+      return [index];
+    },
   };
 }
 
@@ -74,5 +80,22 @@ describe("features/trackers/layer-effects-stack-actions.js", () => {
     tracker.undo(doc.history[0].data, doc);
     assert.equal(doc.layers.length, 2);
     assert.equal(doc.layers[0].name, "Drop");
+  });
+
+  it("moveSelection sends a selected layer to the stack end and Undo restores order", () => {
+    const doc = makeDoc([makeLayer("Bottom"), makeLayer("Middle"), makeLayer("Top")]);
+    const tracker = new TrackerRegistry.LayerEffectsTracker();
+    tracker.track = () => {};
+    tracker.handleInput(
+      { actionKind: Layer.moveSelection, operation: 0 },
+      {}, doc, { isPressed: () => false }, {},
+    );
+    assert.deepEqual(doc.layers.map((layer) => layer.name), ["Middle", "Top", "Bottom"]);
+    assert.deepEqual(doc.selectedLayerIndices, [2]);
+    tracker.undo(doc.history[0].data, doc);
+    assert.deepEqual(doc.layers.map((layer) => layer.name), ["Bottom", "Middle", "Top"]);
+    assert.deepEqual(doc.selectedLayerIndices, [0]);
+    tracker.redo(doc.history[0].data, doc);
+    assert.deepEqual(doc.layers.map((layer) => layer.name), ["Middle", "Top", "Bottom"]);
   });
 });
