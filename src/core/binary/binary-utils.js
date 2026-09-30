@@ -513,18 +513,37 @@ BinaryUtils.writeSize = function (wbuf, pos, val) {
 // ---------------------------------------------------------------------------
 
 BinaryUtils.readInt64BE = function (buf, offset) {
-  return BinaryUtils.readUint32BE(buf, offset) << 32 | BinaryUtils.readUint32BE(buf, offset + 4);
+  requireInt64Range(buf, offset);
+  var value = BinaryUtils.readUint32BE(buf, offset) * 4294967296 + BinaryUtils.readUint32BE(buf, offset + 4);
+  requireInt64Value(value);
+  return value;
 };
 
 BinaryUtils.writeInt64BERaw = function (dest, offset, val) {
-  BinaryUtils.writeUint32BE(dest, offset, val >> 16 >> 16);
-  BinaryUtils.writeUint32BE(dest, offset + 4, val & 0xFFFFFFFF);
+  requireInt64Value(val);
+  requireInt64Range(dest, offset);
+  BinaryUtils.writeUint32BE(dest, offset, Math.floor(val / 4294967296));
+  BinaryUtils.writeUint32BE(dest, offset + 4, val % 4294967296);
 };
 
 BinaryUtils.writeInt64BE = function (wbuf, pos, val) {
+  requireInt64Value(val);
+  if (!Number.isSafeInteger(pos) || pos < 0 || pos > Number.MAX_SAFE_INTEGER - 8)
+    throw new RangeError("Invalid 64-bit integer offset");
   wbuf.ensureCapacity(pos, 8);
   BinaryUtils.writeInt64BERaw(wbuf.data, pos, val);
 };
+
+// Historical names: these fields are unsigned file lengths and offsets.
+function requireInt64Value(value) {
+  if (!Number.isSafeInteger(value) || value < 0)
+    throw new RangeError("64-bit integer exceeds supported unsigned safe Number range");
+}
+
+function requireInt64Range(bytes, offset) {
+  if (!Number.isSafeInteger(offset) || offset < 0 || offset > bytes.length - 8)
+    throw new RangeError("Truncated or invalid 64-bit integer range");
+}
 
 // ---------------------------------------------------------------------------
 // float32
