@@ -11,6 +11,8 @@ installBrowserGlobals();
 let ActionDescUtil;
 let TrackerRegistry;
 let Layer;
+let installWebviewConfirm;
+let installToastPainter;
 
 before(async () => {
   await import("../../../src/features/filters/filter-registry.js");
@@ -20,6 +22,7 @@ before(async () => {
   const { registerTrackers } = await import("../../../src/features/trackers/register-trackers.js");
   registerTrackers(TrackerRegistry);
   ({ Layer } = await import("../../../src/document/model/layer.js"));
+  ({ installWebviewConfirm, installToastPainter } = await import("../../../src/core/user-prompts.js"));
 });
 
 describe("features/scripting/action-desc.js", () => {
@@ -460,6 +463,96 @@ describe("features/scripting/action-desc.js", () => {
     });
     assert.deepEqual(dispatched, ["editable-pixels"]);
   });
+
+  for (const [conditionType, matchingAdd, matchingGroup] of [
+    ["Adjs", { levl: {} }, false],
+    ["Shp", { vogk: {} }, false],
+    ["Grup", {}, true],
+  ]) {
+    it(`expands ${conditionType} only for a matching selected layer`, () => {
+      const selected = { add: matchingAdd, isGroup: () => matchingGroup };
+      const ordinary = { add: {}, isGroup: () => false };
+      const doc = { layers: [selected, ordinary], selectedLayerIndices: [0],
+        ensureLayerEditableForTools: () => false };
+      const actionSets = [{ name: "Set", children: [
+        { name: "Caller", children: [
+          { enabled: true, uf: "conditional", actionDescriptor: {
+            null: { v: { Cndt: conditionType } },
+            then: { v: [{ v: { val: "Branch" } }, { v: { val: "Set" } }] },
+          } },
+          { enabled: true, uf: "after" },
+        ] },
+        { name: "Branch", children: [{ enabled: true, uf: "matching-branch" }] },
+      ] }];
+      const dispatched = [];
+      const dispatcher = { dispatch(event) { dispatched.push(event.data.uf); } };
+      ActionDescUtil.playActionSetSteps(doc, actionSets, "Caller", "Set", dispatcher);
+      assert.deepEqual(dispatched, ["matching-branch", "after"]);
+      doc.selectedLayerIndices = [1];
+      dispatched.length = 0;
+      ActionDescUtil.playActionSetSteps(doc, actionSets, "Caller", "Set", dispatcher);
+      assert.deepEqual(dispatched, ["after"]);
+    });
+  }
+
+  for (const [label, confirm, expected] of [
+    ["accepted", () => true, ["before", "after"]],
+    ["cancelled", () => false, ["before"]],
+    ["blocked", () => { throw new Error("dialogs blocked"); }, ["before"]],
+    ["asynchronous", () => Promise.resolve(true), ["before"]],
+  ]) {
+    it(`honours ${label} optional Stop and permits fresh replay afterward`, () => {
+      const prompts = [];
+      const dispatched = [];
+      const stop = { enabled: true, uf: "stop", actionDescriptor: {
+        Msge: { t: "TEXT", v: "Continue this action?" },
+        Cntn: { t: "bool", v: true },
+      } };
+      const actionSets = [{ name: "Set", children: [{ name: "Action", children: [
+        { enabled: true, uf: "before" }, stop, { enabled: true, uf: "after" },
+      ] }] }];
+      const dispatcher = { dispatch(event) { dispatched.push(event.data.uf); } };
+      installWebviewConfirm((message) => { prompts.push(message); return confirm(); });
+      try {
+        ActionDescUtil.playActionSetSteps({}, actionSets, "Action", "Set", dispatcher);
+        assert.deepEqual(prompts, ["Continue this action?"]);
+        assert.deepEqual(dispatched, expected);
+        dispatched.length = 0;
+        stop.enabled = false;
+        ActionDescUtil.playActionSetSteps({}, actionSets, "Action", "Set", dispatcher);
+        assert.deepEqual(dispatched, ["before", "after"]);
+        assert.equal(prompts.length, 1, "disabled Stop must not prompt");
+      } finally {
+        installWebviewConfirm(null);
+      }
+    });
+  }
+
+  for (const continueValue of [undefined, false]) {
+    it(`stops unconditionally with Cntn=${continueValue} and displays its message`, () => {
+      const messages = [];
+      const dispatched = [];
+      const actionDescriptor = { Msge: { t: "TEXT", v: "Stopped here" } };
+      if (continueValue !== undefined) actionDescriptor.Cntn = { t: "bool", v: continueValue };
+      const actionSets = [{ name: "Set", children: [{ name: "Action", children: [
+        { enabled: true, uf: "before" },
+        { enabled: true, uf: "stop", actionDescriptor },
+        { enabled: true, uf: "after" },
+      ] }] }];
+      installToastPainter((message) => messages.push(message));
+      installWebviewConfirm(() => { assert.fail("unconditional Stop must not confirm"); });
+      try {
+        ActionDescUtil.playActionSetSteps({}, actionSets, "Action", "Set", {
+          dispatch(event) { dispatched.push(event.data.uf); },
+        });
+        assert.deepEqual(dispatched, ["before"]);
+        assert.deepEqual(messages, ["Stopped here"]);
+      } finally {
+        installToastPainter(null);
+        installWebviewConfirm(null);
+      }
+    });
+  }
 
   it("plays only the selected duplicate-name action and skips its disabled steps", () => {
     const actionSets = [

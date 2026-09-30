@@ -184,7 +184,9 @@ ActionDescUtil.playActionSetSteps = function(doc, actionSets, setIndex, stepInde
         const thenBranch = step.actionDescriptor.then.v;
         if (conditionMet) ActionDescUtil.collectActionStepsFromSet(actionSets, thenBranch[0].v.val, thenBranch[1].v.val, stepStack)
       } else if (step.uf == "stop") {
-        if (step.actionDescriptor.Cntn && step.actionDescriptor.Cntn.v == true) confirmUser(step.actionDescriptor.Msge.v);
+        if (step.actionDescriptor.Cntn && step.actionDescriptor.Cntn.v == true) {
+          if (!confirmUser(step.actionDescriptor.Msge.v)) break;
+        }
         else {
           showToast(step.actionDescriptor.Msge.v);
           break
