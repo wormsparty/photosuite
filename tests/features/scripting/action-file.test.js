@@ -179,4 +179,105 @@ describe("features/scripting/action-file.js", () => {
     sample[84] = 1;
     assert.throws(() => ActionParser.parse(sample.buffer), /Invalid ATN/);
   });
+
+  it("preserves nested typed descriptors and following steps on import", () => {
+    const set = sampleActionSet();
+    const descriptor = {
+      classID: "null", __name: "Paramètres",
+      flag: { t: "bool", v: true },
+      text: { t: "TEXT", v: "Été 🎨" },
+      raw: { t: "tdta", v: [0, 127, 255] },
+      list: { t: "VlLs", v: [{ t: "long", v: -7 }, { t: "Objc", v: {
+        classID: "null", amount: { t: "UntF", v: { type: "#Prc", val: 12.5 } },
+      } }] },
+      path: { t: "Pth ", v: { sig: "txtu", pth: "/tmp/été.psd" } },
+      alias: { t: "alis", v: "small.bin" },
+      reference: { t: "obj ", v: [
+        { t: "prop", v: { classID: "Lyr", keyID: "Nm" } },
+        { t: "Enmr", v: { classID: "Lyr", typeID: "Ordn", enum: "Trgt" } },
+        { t: "indx", v: { classID: "Lyr", val: 2 } },
+        { t: "name", v: { classID: "Lyr", val: "Épreuve" } },
+      ] },
+      array: { t: "ObAr", v: { classID: "null", arr: [
+        { id: "Hrzn", type: "UnFl", uID: "#Pxl", arr: [1.25, -2] },
+      ] } },
+    };
+    set.children[0].children[0].actionDescriptor = descriptor;
+    set.children[0].children.push({ expanded: false, enabled: true,
+      dialogOptionsEnabled: false, dialogOptions: 0, uf: "Mk  ", eventClassName: "" });
+    const [parsed] = ActionParser.parse(ActionParser.serialize(set));
+    assert.deepEqual(parsed.children[0].children[0].actionDescriptor, descriptor);
+    assert.equal(parsed.children[0].children[1].uf, "Mk  ");
+    assert.equal(parsed.children[0].children[1].enabled, true);
+  });
+
+  it("rejects negative embedded descriptor field counts and key lengths", () => {
+    // Descriptor starts at byte 85: six-byte empty Unicode name, eight-byte
+    // class key, then the four-byte field count. Tiny fixtures are safe before.
+    for (const offset of [91, 99]) {
+      const bytes = Uint8Array.from(SERIALIZED_SAMPLE);
+      bytes.fill(255, offset, offset + 4);
+      assert.throws(() => ActionParser.parse(bytes.buffer), `negative field at ${offset}`);
+    }
+  });
+
+  it("rejects truncated embedded scalar and variable-length payloads", () => {
+    for (const node of [
+      { t: "bool", v: true }, { t: "long", v: 7 }, { t: "doub", v: 2.5 },
+      { t: "UntF", v: { type: "#Prc", val: 25 } },
+      { t: "TEXT", v: "é" }, { t: "tdta", v: [7] },
+      { t: "alis", v: "a" }, { t: "Pth ", v: { sig: "txtu", pth: "a" } },
+    ]) {
+      const set = sampleActionSet();
+      set.children[0].children[0].actionDescriptor = { classID: "null", data: node };
+      const bytes = new Uint8Array(ActionParser.serialize(set));
+      assert.throws(() => ActionParser.parse(bytes.slice(0, -1).buffer), node.t);
+    }
+  });
+
+  it("rejects oversized embedded declarations before allocation or iteration (after-only)", () => {
+    // Never run these hostile declarations against the historical decoder.
+    for (const type of ["TEXT", "tdta", "alis", "VlLs"]) {
+      const set = sampleActionSet();
+      const values = { TEXT: "a", tdta: [1], alis: "a", VlLs: [] };
+      set.children[0].children[0].actionDescriptor = {
+        classID: "null", data: { t: type, v: values[type] },
+      };
+      const bytes = new Uint8Array(ActionParser.serialize(set));
+      // One fixed-size field key and its type follow the empty descriptor header.
+      bytes.fill(255, 115, 119);
+      assert.throws(() => ActionParser.parse(bytes.buffer), type);
+    }
+    const bytes = Uint8Array.from(SERIALIZED_SAMPLE);
+    bytes.fill(255, 85, 89);
+    assert.throws(() => ActionParser.parse(bytes.buffer), "Unicode name count");
+  });
+
+  it("rejects excessive embedded nesting and permits a fresh bounded parse (after-only)", () => {
+    const set = sampleActionSet();
+    let node = { t: "long", v: 1 };
+    for (let depth = 0; depth < 80; depth++) node = { t: "VlLs", v: [node] };
+    set.children[0].children[0].actionDescriptor = { classID: "null", data: node };
+    assert.throws(() => ActionParser.parse(ActionParser.serialize(set)), /depth|nest|limit/i);
+    assert.equal(ActionParser.parse(Uint8Array.from(SERIALIZED_SAMPLE).buffer)[0].name, "My Set");
+  });
+
+
+  it("bounds embedded object-array channel and value counts (after-only)", () => {
+    const set = sampleActionSet();
+    set.children[0].children[0].actionDescriptor = {
+      classID: "null", data: { t: "ObAr", v: { classID: "null", arr: [
+        { id: "Hrzn", type: "UnFl", uID: "#Pxl", arr: [1] },
+      ] } },
+    };
+    const original = new Uint8Array(ActionParser.serialize(set));
+    // Payload starts at 115; count/name/class precede the channel count.
+    // A fixed channel header precedes its value count. Guarded decoder only.
+    for (const offset of [133, 153]) {
+      const bytes = original.slice();
+      bytes.fill(255, offset, offset + 4);
+      assert.throws(() => ActionParser.parse(bytes.buffer), `array count at ${offset}`);
+    }
+  });
+
 });

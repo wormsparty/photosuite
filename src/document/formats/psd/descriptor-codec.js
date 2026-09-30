@@ -3,9 +3,49 @@
  * Adobe asset loaders. OSType codes and slot keys (`t`, `v`, `classID`) are wire format.
  */
 
-import { BinaryUtils } from "../../../core/binary/binary-utils.js";
+import { BinaryUtils as RawBinaryUtils } from "../../../core/binary/binary-utils.js";
 import { Rect } from "../../../core/math/rect.js";
 import { cornersToHomography, toMatrix2D } from "../../../engine/compositing/homography.js";
+
+/** Reject malformed descriptor ranges before reads or count-controlled loops. */
+function requireBytes(data, pos, size) {
+  if (!Number.isSafeInteger(pos) || !Number.isSafeInteger(size) || pos < 0 || size < 0 || size > data.length - pos) {
+    throw new Error("psd-descriptor: truncated or invalid byte range");
+  }
+}
+function requireCount(data, pos, count, minimumSize) {
+  requireBytes(data, pos, count * minimumSize);
+}
+function requireDepth(depth) {
+  if (!Number.isInteger(depth) || depth < 0 || depth > 64) throw new Error("psd-descriptor: nesting limit exceeded");
+}
+// Writes retain the shared binary helpers; descriptor reads enforce their ranges.
+const BinaryUtils = { ...RawBinaryUtils };
+for (const [method, size] of [["readUint32BE", 4], ["readInt32BE", 4], ["readFloat64BE", 8], ["readFloat32", 4]]) {
+  BinaryUtils[method] = (data, pos) => {
+    requireBytes(data, pos, size);
+    return RawBinaryUtils[method](data, pos);
+  };
+}
+BinaryUtils.readString = (data, pos, size) => {
+  requireBytes(data, pos, size);
+  return RawBinaryUtils.readString(data, pos, size);
+};
+BinaryUtils.readUnicodeName = (data, pos) => {
+  const count = BinaryUtils.readUint32BE(data, pos);
+  requireCount(data, pos + 4, count, 2);
+  if (count === 0) return "";
+  if (data[pos + 4 + count * 2 - 2] !== 0 || data[pos + 4 + count * 2 - 1] !== 0) {
+    throw new Error("psd-descriptor: missing Unicode terminator");
+  }
+  return RawBinaryUtils.readUnicodeName(data, pos);
+};
+BinaryUtils.readUnicodeStringLE = (data, pos) => {
+  const count = BinaryUtils.readFloat32(data, pos);
+  requireCount(data, pos + 4, count, 2);
+  if (!Number.isInteger(count)) throw new Error("psd-descriptor: invalid Unicode length");
+  return RawBinaryUtils.readUnicodeStringLE(data, pos);
+};
 
 /** Reference OSType codes → the OSKey fields each carries, in order. */
 const OSTYPE_FIELDS = {
@@ -26,6 +66,7 @@ function parseDescriptor(data, desc, pos, debug, depth) {
   var startPos = pos;
   var name;
   if (depth == null) depth = 0;
+  requireDepth(depth);
   var nameLen = BinaryUtils.readUint32BE(data, pos);
   if (nameLen == 0) {
     name = "";
@@ -40,6 +81,7 @@ function parseDescriptor(data, desc, pos, debug, depth) {
   pos += keySize(data, pos);
   var fieldCount = BinaryUtils.readInt32BE(data, pos);
   pos += 4;
+  requireCount(data, pos, fieldCount, 9);
   for (var i = 0; i < fieldCount; i++) {
     var fieldKey = readOSKey(data, pos);
     pos += keySize(data, pos);
@@ -75,6 +117,8 @@ function writeDescriptor(buf, desc, pos) {
 
 /** Read a single typed value node { t, v }. Carries a transient `size` field. */
 function readValue(data, pos, debug, depth) {
+  if (depth == null) depth = 0;
+  requireDepth(depth);
   var startPos = pos;
   var typeCode = BinaryUtils.readString(data, pos, 4);
   pos += 4;
@@ -86,6 +130,7 @@ function readValue(data, pos, debug, depth) {
       result.v = [];
       var itemCount = BinaryUtils.readUint32BE(data, pos);
       pos += 4;
+      requireCount(data, pos, itemCount, 4);
       for (var i = 0; i < itemCount; i++) {
         var item = readValue(data, pos, debug, depth + 1);
         pos += item.size;
@@ -102,6 +147,7 @@ function readValue(data, pos, debug, depth) {
       pos += 8;
       break;
     case "bool":
+      requireBytes(data, pos, 1);
       result.v = data[pos] == 1;
       pos += 1;
       break;
@@ -110,6 +156,7 @@ function readValue(data, pos, debug, depth) {
       pos += 4;
       break;
     case "comp":
+      requireBytes(data, pos, 8);
       result.v = BinaryUtils.readInt32BE(data, pos + 4);
       pos += 8;
       break;
@@ -138,6 +185,7 @@ function readValue(data, pos, debug, depth) {
     case "tdta":
       var dataLen = BinaryUtils.readInt32BE(data, pos);
       pos += 4;
+      requireBytes(data, pos, dataLen);
       result.v = [];
       for (var i = 0; i < dataLen; i++) result.v.push(data[pos + i]);
       pos += dataLen;
@@ -148,18 +196,21 @@ function readValue(data, pos, debug, depth) {
     case "Pth ":
       var pathLen = BinaryUtils.readUint32BE(data, pos);
       pos += 4;
+      requireBytes(data, pos, pathLen);
+      var pathEnd = pos + pathLen;
       var pathSig = BinaryUtils.readString(data, pos, 4);
       pos += 4;
       pos += 4;
       var pathStr = BinaryUtils.readUnicodeStringLE(data, pos);
       pos += 4 + pathStr.length * 2;
+      if (pos !== pathEnd) throw new Error("psd-descriptor: invalid path length");
       result.v = { sig: pathSig, pth: pathStr };
       break;
     case "Clss":
     case "type":
     case "rele":
       var clssName = BinaryUtils.readUnicodeName(data, pos);
-      pos += 4 + clssName.length * 2 + 2;
+      pos += 4 + BinaryUtils.readUint32BE(data, pos) * 2;
       var clssID = readOSKey(data, pos);
       pos += 4 + Math.max(4, clssID.length);
       result.v = { classID: clssID };
@@ -175,7 +226,7 @@ function readValue(data, pos, debug, depth) {
     case "name":
       var fieldDefs = OSTYPE_FIELDS[typeCode];
       var refName = BinaryUtils.readUnicodeName(data, pos);
-      pos += 4 + refName.length * 2 + 2;
+      pos += 4 + BinaryUtils.readUint32BE(data, pos) * 2;
       if (refName.length != 0) {
         console.log(typeCode, refName);
         throw "psd-descriptor: unexpected reference name";
@@ -188,7 +239,7 @@ function readValue(data, pos, debug, depth) {
       }
       if (typeCode == "name") {
         var nameVal = BinaryUtils.readUnicodeName(data, pos);
-        pos += 4 + nameVal.length * 2 + 2;
+        pos += 4 + BinaryUtils.readUint32BE(data, pos) * 2;
         result.v.val = nameVal;
       }
       if (typeCode == "indx") {
@@ -219,13 +270,14 @@ function readObjectArray(data, pos, result) {
   var arrCount = BinaryUtils.readUint32BE(data, pos);
   pos += 4;
   var arrName = BinaryUtils.readUnicodeName(data, pos);
-  pos += 4 + 2 * arrName.length + 2;
+  pos += 4 + BinaryUtils.readUint32BE(data, pos) * 2;
   if (arrName != "") throw arrName;
   var arrClassID = readOSKey(data, pos);
   pos += 4 + Math.max(4, arrClassID.length);
   result.v = { classID: arrClassID, arr: [] };
   var channelCount = BinaryUtils.readUint32BE(data, pos);
   pos += 4;
+  requireCount(data, pos, channelCount, 17);
   for (var i = 0; i < channelCount; i++) {
     var chID = readOSKey(data, pos);
     pos += 4 + Math.max(4, chID.length);
@@ -237,6 +289,7 @@ function readObjectArray(data, pos, result) {
     result.v.arr.push(ch);
     var valueCount = BinaryUtils.readUint32BE(data, pos, 4);
     pos += 4;
+    requireCount(data, pos, valueCount, 8);
     for (var j = 0; j < valueCount; j++) {
       ch.arr.push(BinaryUtils.readFloat64BE(data, pos));
       pos += 8;
@@ -391,7 +444,7 @@ function writeValue(buf, pos, node) {
 /** Read a 4-char (or length-prefixed) OSType key. */
 function readOSKey(data, pos) {
   var len = BinaryUtils.readInt32BE(data, pos);
-  if (len > 1e3) throw "psd-descriptor: OSKey length out of range";
+  if (len < 0 || len > 1e3) throw "psd-descriptor: OSKey length out of range";
   if (len == 0) len = 4;
   return BinaryUtils.readString(data, pos + 4, len).trim();
 }
@@ -399,6 +452,7 @@ function readOSKey(data, pos) {
 /** Byte size of the OSType key at `pos` (4-byte padded, or 4 + length). */
 function keySize(data, pos) {
   var len = BinaryUtils.readInt32BE(data, pos);
+  if (len < 0 || len > 1e3) throw new Error("psd-descriptor: OSKey length out of range");
   return len == 0 ? 8 : 4 + len;
 }
 
