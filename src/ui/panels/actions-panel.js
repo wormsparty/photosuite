@@ -173,7 +173,8 @@ ActionsPanel.prototype.playSelectedAction = function() {
   const replayEvt = new AppEvent(EventType.uiDispatch, true);
   replayEvt.data = {
     dispatchKind: UiCommand.replayRecordedActionPair,
-    recordedActionPair: [action.name, actionSet.name]
+    recordedActionPair: [action.name, actionSet.name],
+    recordedActionPath: selected.slice(0, 2)
   };
   this.dispatch(replayEvt);
 };

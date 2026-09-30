@@ -330,7 +330,8 @@ const UI_COMMAND_HANDLERS = {
       controller.appData.actionSets,
       data.recordedActionPair[0],
       data.recordedActionPair[1],
-      controller
+      controller,
+      data.recordedActionPath
     );
   },
   dragLayerAcrossDocuments(controller, data) {

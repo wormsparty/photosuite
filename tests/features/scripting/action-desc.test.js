@@ -142,6 +142,38 @@ describe("features/scripting/action-desc.js", () => {
     assert.deepEqual(dispatched, []);
   });
 
+  it("plays only the selected duplicate-name action and skips its disabled steps", () => {
+    const actionSets = [
+      { name: "Set", children: [
+        { name: "Action", children: [
+          { enabled: true, uf: "selected-first" },
+          { enabled: false, uf: "selected-disabled" },
+          { enabled: true, uf: "selected-last" },
+        ] },
+        { name: "Action", children: [{ enabled: true, uf: "other-action" }] },
+      ] },
+      { name: "Set", children: [
+        { name: "Action", children: [{ enabled: true, uf: "other-set" }] },
+      ] },
+    ];
+    const dispatched = [];
+    ActionDescUtil.playActionSetSteps({}, actionSets, "Action", "Set", {
+      dispatch(event) { dispatched.push(event.data.uf); },
+    }, [0, 0]);
+    assert.deepEqual(dispatched, ["selected-first", "selected-last"]);
+  });
+
+  it("does not replay another duplicate when a selected path is stale", () => {
+    const actionSets = [{ name: "Set", children: [
+      { name: "Action", children: [{ enabled: true, uf: "wrong" }] },
+    ] }];
+    const dispatched = [];
+    ActionDescUtil.playActionSetSteps({}, actionSets, "Action", "Set", {
+      dispatch(event) { dispatched.push(event.data.uf); },
+    }, [0, 1]);
+    assert.deepEqual(dispatched, []);
+  });
+
   it("replays recorded Pass Through and Multiply group modes with Undo and Redo", () => {
     const group = {
       blendMode: "norm",

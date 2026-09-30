@@ -184,6 +184,31 @@ describe("ui/panels/actions-panel.js", () => {
     assert.deepEqual(dispatched[0].recordedActionPair, ["Action", "Set"]);
   });
 
+  it("Play identifies the selected row when set and action names are duplicated", () => {
+    const panel = Object.create(ActionsPanel.prototype);
+    panel.doc = {
+      actionSets: [
+        { name: "Set", children: [
+          { name: "Action", children: [{ enabled: true, uf: "first" }] },
+          { name: "Action", children: [{ enabled: true, uf: "second" }] },
+        ] },
+        { name: "Set", children: [
+          { name: "Action", children: [{ enabled: true, uf: "third" }] },
+        ] },
+      ],
+      recordingActionSet: null,
+    };
+    panel.selectedPath = [0, 0];
+    const dispatched = [];
+    panel.dispatch = (event) => dispatched.push(event.data);
+
+    panel.playSelectedAction();
+
+    assert.equal(dispatched.length, 1);
+    assert.deepEqual(dispatched[0].recordedActionPair, ["Action", "Set"]);
+    assert.deepEqual(dispatched[0].recordedActionPath, [0, 0]);
+  });
+
   for (const [label, buttonIndex] of [["Record", 0], ["New Action", 3], ["Delete", 4], ["Export", 5]]) {
     it(`${label} leaves an existing set untouched before row selection`, () => {
       const panel = Object.create(ActionsPanel.prototype);

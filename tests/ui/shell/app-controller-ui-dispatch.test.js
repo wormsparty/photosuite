@@ -11,6 +11,7 @@ import assert from "node:assert/strict";
 import { describe, it, before } from "node:test";
 
 import { installBrowserGlobals } from "../../helpers/stub-browser-globals.js";
+import { UiCommand } from "../../../src/core/event-bus.js";
 import { promptConfirmUser } from "../../../src/core/user-prompts.js";
 import { installWebviewConfirm } from "../../../src/core/user-prompts.js";
 import { ensureFormatLoaders } from "../../../src/document/formats/registry/format-loader-imports.js";
@@ -121,6 +122,32 @@ describe("ui/shell/app-controller-ui-dispatch.js", () => {
     assert.equal(typeof FakeController.prototype.saveDocumentToNewFile, "function");
     assert.equal(typeof FakeController.prototype.markDocumentSaved, "function");
     assert.equal(typeof FakeController.prototype.deferSaveUntilFormatLoaders, "function");
+  });
+
+  it("forwards a selected duplicate action path through UI dispatch", () => {
+    function FakeController() {}
+    applyUiDispatchHandlers(FakeController);
+    const controller = new FakeController();
+    controller.appData = { actionSets: [
+      { name: "Set", children: [
+        { name: "Action", children: [{ enabled: true, uf: "selected" }] },
+        { name: "Action", children: [{ enabled: true, uf: "other-action" }] },
+      ] },
+      { name: "Set", children: [
+        { name: "Action", children: [{ enabled: true, uf: "other-set" }] },
+      ] },
+    ] };
+    controller.getCurrentDoc = () => ({});
+    const dispatched = [];
+    controller.dispatch = (event) => dispatched.push(event.data.uf);
+
+    controller.onUiDispatch({ data: {
+      dispatchKind: UiCommand.replayRecordedActionPair,
+      recordedActionPair: ["Action", "Set"],
+      recordedActionPath: [0, 0],
+    } });
+
+    assert.deepEqual(dispatched, ["selected"]);
   });
 
   // A writer ships in the same on-demand module as its parser. Export As waits

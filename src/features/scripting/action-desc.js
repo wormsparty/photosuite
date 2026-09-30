@@ -146,11 +146,22 @@ ActionDescUtil.buildSetLayerPropertyAction = function(propertyKey, propertyValue
     }
   };
 };
-ActionDescUtil.playActionSetSteps = function(doc, actionSets, setIndex, stepIndex, dispatcher) {
+ActionDescUtil.playActionSetSteps = function(doc, actionSets, setIndex, stepIndex, dispatcher, actionPath) {
   const historyEvent = new AppEvent(EventType.historyGrouped, true);
   const stepStack = [];
   let stepCount = 0;
-  const unusedStepCount = ActionDescUtil.collectActionStepsFromSet(actionSets, setIndex, stepIndex, stepStack);
+  if (actionPath === undefined) {
+    ActionDescUtil.collectActionStepsFromSet(actionSets, setIndex, stepIndex, stepStack);
+  } else {
+    const [setPosition, actionPosition] = Array.isArray(actionPath) ? actionPath : [];
+    const action = Number.isInteger(setPosition) && Number.isInteger(actionPosition) &&
+      setPosition >= 0 && actionPosition >= 0 &&
+      actionSets[setPosition]?.children?.[actionPosition];
+    if (action?.name === setIndex && actionSets[setPosition].name === stepIndex) {
+      const steps = action.children;
+      for (let pushIdx = steps.length - 1; pushIdx >= 0; pushIdx--) stepStack.push(steps[pushIdx]);
+    }
+  }
   while (stepStack.length != 0) {
     const step = stepStack.pop();
     stepCount++;
