@@ -16,11 +16,11 @@ const u64 = value => { const bytes = Buffer.alloc(8); bytes.writeBigUInt64BE(Big
 const end = Buffer.alloc(8);
 const property = (type, bytes) => Buffer.concat([u32(type), u32(bytes.length), bytes]);
 
-// Independent little fixtures use no application encoder. All dimensions stay 1×1.
-function fixture({ idSize = 4, layerProperties = Buffer.alloc(0), tile = Buffer.from([0, 23, 0, 61, 0, 107, 0, 255]) } = {}) {
+// Independent tiny fixtures use no application encoder. Dimensions stay at most 3×1.
+function fixture({ width = 1, idSize = 4, layerProperties = Buffer.alloc(0), tile = Buffer.from([0, 23, 0, 61, 0, 107, 0, 255]) } = {}) {
   const id = idSize == 4 ? u32 : u64;
   const name = Buffer.from("Tiny\0");
-  const header = Buffer.concat([Buffer.from(idSize == 4 ? "gimp xcf v003\0" : "gimp xcf v007\0"), u32(1), u32(1), u32(0),
+  const header = Buffer.concat([Buffer.from(idSize == 4 ? "gimp xcf v003\0" : "gimp xcf v007\0"), u32(width), u32(1), u32(0),
     ...(idSize == 8 ? [u32(100)] : []), property(17, Buffer.from([1])), end]);
   const layerOffset = header.length + 3 * idSize;
   const layerNameOffset = layerOffset + 12;
@@ -30,9 +30,9 @@ function fixture({ idSize = 4, layerProperties = Buffer.alloc(0), tile = Buffer.
   const levelOffset = hierarchyOffset + 12 + idSize;
   const tilePointerOffset = levelOffset + 8;
   const tileOffset = tilePointerOffset + 2 * idSize;
-  const bytes = Buffer.concat([header, id(layerOffset), id(0), id(0), u32(1), u32(1), u32(1), u32(name.length), name,
-    layerProperties, end, id(hierarchyOffset), id(0), u32(1), u32(1), u32(4), id(levelOffset),
-    u32(1), u32(1), id(tileOffset), id(0), tile]);
+  const bytes = Buffer.concat([header, id(layerOffset), id(0), id(0), u32(width), u32(1), u32(1), u32(name.length), name,
+    layerProperties, end, id(hierarchyOffset), id(0), u32(width), u32(1), u32(4), id(levelOffset),
+    u32(width), u32(1), id(tileOffset), id(0), tile]);
   return { bytes, header, id, idSize, layerOffset, layerNameOffset, layerPropertyOffset, hierarchyPointerOffset, hierarchyOffset, levelOffset, tilePointerOffset, tileOffset };
 }
 function parse(bytes) {
@@ -105,5 +105,51 @@ describe("XCF bounded binary metadata (malformed controls are after-only)", () =
     const payload = Buffer.concat([u32(name.length), name, u32(1), u32(1), Buffer.from([7]), u32(0), u32(1), u32(0)]);
     const doc = parse(fixture({ layerProperties: property(21, payload) }).bytes);
     assert.deepEqual(Array.from(doc.layers[0].buffer), [23, 61, 107, 255]);
+  });
+});
+
+
+describe("XCF bounded RLE tiles (malformed controls are after-only)", () => {
+  it("decodes all four short/long repeat/literal forms without crossing channel boundaries", () => {
+    for (const idSize of [4, 8]) {
+      const tile = Buffer.from([255, 23, 128, 0, 1, 61, 127, 0, 1, 107, 0, 255]);
+      const doc = parse(fixture({ idSize, tile }).bytes);
+      assert.deepEqual(Array.from(doc.layers[0].buffer), [23, 61, 107, 255]);
+    }
+  });
+  it("retains mixed three-pixel repeats and literal runs on exact channel boundaries", () => {
+    const tile = Buffer.from([1, 23, 0, 45, 253, 61, 62, 63, 127, 0, 3, 107, 128, 0, 3, 255, 128, 64]);
+    const doc = parse(fixture({ width: 3, tile }).bytes);
+    assert.equal(doc.width, 3);
+    assert.deepEqual(Array.from(doc.layers[0].buffer), [23, 61, 107, 255, 23, 62, 107, 128, 45, 63, 107, 64]);
+  });
+  for (const [label, tile] of [
+    ["short repeat value", [0]], ["short literal payload", [255]],
+    ["long repeat length", [127]], ["long repeat low byte", [127, 0]], ["long repeat value", [127, 0, 1]],
+    ["long literal length", [128]], ["long literal low byte", [128, 0]], ["long literal payload", [128, 0, 1]],
+    ["zero long repeat", [127, 0, 0, 23]], ["zero long literal", [128, 0, 0]],
+    ["short repeat overrun", [1, 23, 0, 61, 0, 107, 0, 255]],
+    ["short literal overrun", [254, 23, 24, 0, 61, 0, 107, 0, 255]],
+    ["long repeat overrun", [127, 255, 255, 23]], ["long literal overrun", [128, 255, 255, 23]],
+  ]) {
+    it(`rejects ${label} in a 1×1 tile`, () => rejects(fixture({ tile: Buffer.from(tile) }).bytes));
+  }
+  it("rejects every truncated canonical four-form RLE prefix", () => {
+    const current = fixture({ tile: Buffer.from([255, 23, 128, 0, 1, 61, 127, 0, 1, 107, 0, 255]) });
+    for (let length = current.tileOffset + 1; length < current.bytes.length; length++) rejects(current.bytes.subarray(0, length));
+  });
+  it("rejects a run exceeding only the remaining samples", () => {
+    const tile = Buffer.from([0, 23, 2, 45, 253, 61, 62, 63, 2, 107, 2, 255]);
+    rejects(fixture({ width: 3, tile }).bytes, /invalid RLE run length/);
+  });
+  it("rejects unsupported fractional or excessive RLE channel layouts", () => {
+    const current = fixture();
+    for (const bpp of [0, 5]) {
+      const malformed = Buffer.from(current.bytes); u32(bpp).copy(malformed, current.hierarchyOffset + 8);
+      rejects(malformed, /invalid RLE channel layout/);
+    }
+    const deep = fixture({ idSize: 8 });
+    const malformed = Buffer.from(deep.bytes); u32(250).copy(malformed, 26); u32(3).copy(malformed, deep.hierarchyOffset + 8);
+    rejects(malformed, /invalid RLE channel layout/);
   });
 });

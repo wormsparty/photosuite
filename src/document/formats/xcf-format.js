@@ -487,40 +487,38 @@ function readTilePixels(bytes, offset, byteLength, compressionType, sampleCount,
 
 /** Decode a run-length-encoded tile into per-channel planes. */
 function decodeRleTile(bytes, offset, byteLength, sampleCount, channelSlices) {
+  if (!Number.isInteger(sampleCount) || sampleCount < 1 || sampleCount > channelSlices.length || !Number.isSafeInteger(byteLength) || byteLength < 1) {
+    throw new RangeError("xcf: invalid RLE channel layout");
+  }
   for (var ch = 0; ch < sampleCount; ch++) {
     var channelData = channelSlices[ch];
+    if (byteLength > channelData.length) throw new RangeError("xcf: RLE channel exceeds tile buffer");
     var writePos = 0;
     while (writePos < byteLength) {
+      requireBytes(bytes, offset, 1);
       var runHeader = bytes[offset];
       offset++;
-      if (runHeader < RLE_LONG_RUN) {
-        var runValue = bytes[offset];
-        offset++;
-        runHeader++;
-        for (var runIdx = 0; runIdx < runHeader; runIdx++) channelData[writePos + runIdx] = runValue;
-      } else if (runHeader == RLE_LONG_RUN) {
-        var runHi = bytes[offset];
-        offset++;
-        var runLo = bytes[offset];
-        offset++;
-        var runValue = bytes[offset];
-        offset++;
-        runHeader = runHi << 8 | runLo;
-        for (var runIdx = 0; runIdx < runHeader; runIdx++) channelData[writePos + runIdx] = runValue;
-      } else if (runHeader == RLE_LONG_COPY) {
-        var runHi = bytes[offset];
-        offset++;
-        var runLo = bytes[offset];
-        offset++;
-        runHeader = runHi << 8 | runLo;
-        for (var runIdx = 0; runIdx < runHeader; runIdx++) channelData[writePos + runIdx] = bytes[offset + runIdx];
-        offset += runHeader;
+      var repeat = runHeader <= RLE_LONG_RUN;
+      var runLength;
+      if (runHeader == RLE_LONG_RUN || runHeader == RLE_LONG_COPY) {
+        requireBytes(bytes, offset, 2);
+        runLength = bytes[offset] << 8 | bytes[offset + 1];
+        offset += 2;
       } else {
-        runHeader = 256 - runHeader;
-        for (var runIdx = 0; runIdx < runHeader; runIdx++) channelData[writePos + runIdx] = bytes[offset + runIdx];
-        offset += runHeader;
+        runLength = repeat ? runHeader + 1 : 256 - runHeader;
       }
-      writePos += runHeader;
+      if (runLength == 0 || runLength > byteLength - writePos) {
+        throw new RangeError("xcf: invalid RLE run length");
+      }
+      requireBytes(bytes, offset, repeat ? 1 : runLength);
+      if (repeat) {
+        var runValue = bytes[offset++];
+        channelData.fill(runValue, writePos, writePos + runLength);
+      } else {
+        channelData.set(bytes.subarray(offset, offset + runLength), writePos);
+        offset += runLength;
+      }
+      writePos += runLength;
     }
   }
 }
