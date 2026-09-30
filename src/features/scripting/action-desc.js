@@ -37,6 +37,7 @@ function targetClassIdFromRef(targetRef) {
 function evaluateActionCondition(doc, conditionType, activeLayer) {
   if (conditionType == "Bckg") return false;
   if (conditionType == "Pxel" && doc.ensureLayerEditableForTools(false)) return true;
+  if (!activeLayer) return false;
   if (conditionType == "Adjs" && adjustmentKeyOf(activeLayer.add)) return true;
   if (conditionType == "Shp" && activeLayer.add.vogk) return true;
   if (conditionType == "Grup" && activeLayer.isGroup()) return true;

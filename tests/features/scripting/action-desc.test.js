@@ -310,6 +310,157 @@ describe("features/scripting/action-desc.js", () => {
     assert.deepEqual(dispatched, ["later-step"]);
   });
 
+  it("cleans up every nested replay frame after a dispatch error", () => {
+    const actionSets = [{ name: "Set", children: [
+      { name: "Caller", children: [{ enabled: true, uf: "play", actionDescriptor: {
+        null: { v: [{ v: { val: "Child" } }, { v: { val: "Set" } }] },
+      } }, { enabled: true, uf: "caller-after" }] },
+      { name: "Child", children: [{ enabled: true, uf: "child" }] },
+    ] }];
+    const failure = new Error("dispatch failed");
+    let fail = true;
+    const dispatched = [];
+    const dispatcher = {
+      dispatch(event) {
+        if (event.data.dispatchKind) {
+          const [name, set] = event.data.recordedActionPair;
+          ActionDescUtil.playActionSetSteps({}, actionSets, name, set, this);
+        } else if (fail) throw failure;
+        else dispatched.push(event.data.uf);
+      },
+    };
+    assert.throws(() => ActionDescUtil.playActionSetSteps({}, actionSets, "Caller", "Set", dispatcher),
+      (error) => error === failure);
+    assert.deepEqual(dispatched, []);
+    fail = false;
+    ActionDescUtil.playActionSetSteps({}, actionSets, "Caller", "Set", dispatcher);
+    assert.deepEqual(dispatched, ["child", "caller-after"]);
+  });
+
+  it("allows 32 nested actions, excludes the 33rd and resumes each caller", () => {
+    const actions = Array.from({ length: 33 }, (_, index) => ({
+      name: `Action ${index}`,
+      children: [
+        { enabled: true, uf: `before-${index}` },
+        ...(index === 32 ? [] : [{ enabled: true, uf: "play", actionDescriptor: {
+          null: { v: [{ v: { val: `Action ${index + 1}` } }, { v: { val: "Set" } }] },
+        } }]),
+        { enabled: true, uf: `after-${index}` },
+      ],
+    }));
+    const actionSets = [{ name: "Set", children: actions }];
+    const dispatched = [];
+    const dispatcher = {
+      dispatch(event) {
+        if (event.data.dispatchKind) {
+          const [name, set] = event.data.recordedActionPair;
+          ActionDescUtil.playActionSetSteps({}, actionSets, name, set, this);
+        } else dispatched.push(event.data.uf);
+      },
+    };
+    ActionDescUtil.playActionSetSteps({}, actionSets, "Action 0", "Set", dispatcher);
+    assert.deepEqual(dispatched, [
+      ...Array.from({ length: 32 }, (_, index) => `before-${index}`),
+      ...Array.from({ length: 32 }, (_, index) => `after-${31 - index}`),
+    ]);
+    dispatched.length = 0;
+    ActionDescUtil.playActionSetSteps({}, actionSets, "Action 32", "Set", dispatcher);
+    assert.deepEqual(dispatched, ["before-32", "after-32"]);
+  });
+
+  it("shares the 1024-step budget across nested playback and resets it afterward", () => {
+    const actionSets = [{ name: "Set", children: [
+      { name: "Caller", children: [
+        { enabled: true, uf: "before" },
+        { enabled: true, uf: "play", actionDescriptor: {
+          null: { v: [{ v: { val: "Child" } }, { v: { val: "Set" } }] },
+        } },
+        { enabled: true, uf: "after" },
+      ] },
+      { name: "Child", children: Array.from({ length: 1024 }, (_, index) => ({
+        enabled: true, uf: `child-${index}`,
+      })) },
+    ] }];
+    const dispatched = [];
+    const dispatcher = {
+      dispatch(event) {
+        if (event.data.dispatchKind) {
+          const [name, set] = event.data.recordedActionPair;
+          ActionDescUtil.playActionSetSteps({}, actionSets, name, set, this);
+        } else dispatched.push(event.data.uf);
+      },
+    };
+    ActionDescUtil.playActionSetSteps({}, actionSets, "Caller", "Set", dispatcher);
+    assert.deepEqual(dispatched, ["before", ...Array.from({ length: 1022 }, (_, index) => `child-${index}`)]);
+    dispatched.length = 0;
+    ActionDescUtil.playActionSetSteps({}, actionSets, "Child", "Set", dispatcher);
+    assert.deepEqual(dispatched, Array.from({ length: 1024 }, (_, index) => `child-${index}`));
+  });
+
+  it("expands a true conditional in order and leaves a false conditional untouched", () => {
+    const actionSets = [{ name: "Set", children: [
+      { name: "Caller", children: [
+        { enabled: true, uf: "before" },
+        { enabled: true, uf: "conditional", actionDescriptor: {
+          null: { v: { Cndt: "Pxel" } },
+          then: { v: [{ v: { val: "Branch" } }, { v: { val: "Set" } }] },
+        } },
+        { enabled: true, uf: "after" },
+      ] },
+      { name: "Branch", children: [
+        { enabled: true, uf: "branch-first" },
+        { enabled: false, uf: "disabled" },
+        { enabled: true, uf: "branch-last" },
+      ] },
+    ] }];
+    let editable = true;
+    const doc = { layers: [{}], selectedLayerIndices: [0], ensureLayerEditableForTools: () => editable };
+    const dispatched = [];
+    const dispatcher = { dispatch(event) { dispatched.push(event.data.uf); } };
+    ActionDescUtil.playActionSetSteps(doc, actionSets, "Caller", "Set", dispatcher);
+    assert.deepEqual(dispatched, ["before", "branch-first", "branch-last", "after"]);
+    editable = false;
+    dispatched.length = 0;
+    ActionDescUtil.playActionSetSteps(doc, actionSets, "Caller", "Set", dispatcher);
+    assert.deepEqual(dispatched, ["before", "after"]);
+  });
+
+  for (const conditionType of ["Adjs", "Shp", "Grup"]) {
+    it(`treats ${conditionType} as false when no layer is selected`, () => {
+      const actionSets = [{ name: "Set", children: [
+        { name: "Caller", children: [
+          { enabled: true, uf: "conditional", actionDescriptor: {
+            null: { v: { Cndt: conditionType } },
+            then: { v: [{ v: { val: "Branch" } }, { v: { val: "Set" } }] },
+          } },
+          { enabled: true, uf: "after" },
+        ] },
+        { name: "Branch", children: [{ enabled: true, uf: "wrong-branch" }] },
+      ] }];
+      const doc = { layers: [{}], selectedLayerIndices: [], ensureLayerEditableForTools: () => false };
+      const dispatched = [];
+      const dispatcher = { dispatch(event) { dispatched.push(event.data.uf); } };
+      assert.doesNotThrow(() => ActionDescUtil.playActionSetSteps(doc, actionSets, "Caller", "Set", dispatcher), conditionType);
+      assert.deepEqual(dispatched, ["after"], conditionType);
+    });
+  }
+
+  it("keeps pixel editability conditions operative without a selected layer", () => {
+    const actionSets = [{ name: "Set", children: [
+      { name: "Caller", children: [{ enabled: true, uf: "conditional", actionDescriptor: {
+        null: { v: { Cndt: "Pxel" } },
+        then: { v: [{ v: { val: "Branch" } }, { v: { val: "Set" } }] },
+      } }] },
+      { name: "Branch", children: [{ enabled: true, uf: "editable-pixels" }] },
+    ] }];
+    const doc = { layers: [], selectedLayerIndices: [], ensureLayerEditableForTools: () => true };
+    const dispatched = [];
+    ActionDescUtil.playActionSetSteps(doc, actionSets, "Caller", "Set", {
+      dispatch(event) { dispatched.push(event.data.uf); },
+    });
+    assert.deepEqual(dispatched, ["editable-pixels"]);
+  });
+
   it("plays only the selected duplicate-name action and skips its disabled steps", () => {
     const actionSets = [
       { name: "Set", children: [
