@@ -211,6 +211,33 @@ describe("features/scripting/action-file.js", () => {
     assert.equal(parsed.children[0].children[1].enabled, true);
   });
 
+  it("preserves signed integer widths and a following action step", () => {
+    const set = sampleActionSet();
+    const descriptor = { classID: "null", values: { t: "VlLs", v: [
+      ...[-1, -2147483648, 2147483647].map(v => ({ t: "long", v })),
+      ...[-1, 4294967296, -4294967296, Number.MAX_SAFE_INTEGER,
+        Number.MIN_SAFE_INTEGER].map(v => ({ t: "comp", v })),
+    ] } };
+    set.children[0].children[0].actionDescriptor = descriptor;
+    set.children[0].children.push({ expanded: false, enabled: true,
+      dialogOptionsEnabled: false, dialogOptions: 0, uf: "Mk  ", eventClassName: "" });
+    const [parsed] = ActionParser.parse(ActionParser.serialize(set));
+    assert.deepEqual(parsed.children[0].children[0].actionDescriptor, descriptor);
+    assert.equal(parsed.children[0].children[1].uf, "Mk  ");
+  });
+
+  it("preserves an empty object array and a following action step", () => {
+    const set = sampleActionSet();
+    const descriptor = { classID: "null", channels: { t: "ObAr", v: { classID: "null", arr: [] } },
+      following: { t: "bool", v: true } };
+    set.children[0].children[0].actionDescriptor = descriptor;
+    set.children[0].children.push({ expanded: false, enabled: true,
+      dialogOptionsEnabled: false, dialogOptions: 0, uf: "Mk  ", eventClassName: "" });
+    const [parsed] = ActionParser.parse(ActionParser.serialize(set));
+    assert.deepEqual(parsed.children[0].children[0].actionDescriptor, descriptor);
+    assert.equal(parsed.children[0].children[1].uf, "Mk  ");
+  });
+
   it("rejects negative embedded descriptor field counts and key lengths", () => {
     // Descriptor starts at byte 85: six-byte empty Unicode name, eight-byte
     // class key, then the four-byte field count. Tiny fixtures are safe before.
