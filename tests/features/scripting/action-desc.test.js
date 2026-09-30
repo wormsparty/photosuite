@@ -107,6 +107,28 @@ describe("features/scripting/action-desc.js", () => {
     );
   });
 
+  it("plays the named set's enabled steps in order and skips disabled steps", () => {
+    const actionSets = [
+      { name: "Other set", children: [{ name: "Action", children: [{ enabled: true, uf: "wrong-set" }] }] },
+      { name: "Set", children: [
+        { name: "Other action", children: [{ enabled: true, uf: "wrong-action" }] },
+        { name: "Action", children: [
+          { enabled: true, uf: "first", actionDescriptor: { value: 1 } },
+          { enabled: false, uf: "disabled", actionDescriptor: { value: 2 } },
+          { enabled: true, uf: "last", actionDescriptor: { value: 3 } },
+        ] },
+      ] },
+    ];
+    const dispatched = [];
+    ActionDescUtil.playActionSetSteps({}, actionSets, "Action", "Set", {
+      dispatch(event) { dispatched.push({ type: event.type, data: structuredClone(event.data) }); },
+    });
+    assert.deepEqual(dispatched.map(({ data }) => data), [
+      { uf: "first", actionDescriptor: { value: 1 } },
+      { uf: "last", actionDescriptor: { value: 3 } },
+    ]);
+  });
+
   it("replays recorded Pass Through and Multiply group modes with Undo and Redo", () => {
     const group = {
       blendMode: "norm",
