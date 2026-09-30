@@ -129,6 +129,19 @@ describe("features/scripting/action-desc.js", () => {
     ]);
   });
 
+  it("ignores playback when a previously saved action name no longer exists", () => {
+    const actionSets = [{ name: "Set", children: [{
+      name: "Current", children: [{ enabled: true, uf: "make" }],
+    }] }];
+    const dispatched = [];
+    assert.doesNotThrow(() => ActionDescUtil.playActionSetSteps(
+      {}, actionSets, "Deleted", "Set", {
+        dispatch(event) { dispatched.push(event); },
+      },
+    ));
+    assert.deepEqual(dispatched, []);
+  });
+
   it("replays recorded Pass Through and Multiply group modes with Undo and Redo", () => {
     const group = {
       blendMode: "norm",

@@ -194,8 +194,10 @@ ActionDescUtil.collectActionStepsFromSet = function(actionSets, setIndex, stepIn
       steps = actions[actionIdx].children
     }
   }
+  if (!steps) return 0;
   let stepCount = steps.length;
   for (let pushIdx = 0; pushIdx < stepCount; pushIdx++) outStack.push(steps[stepCount - 1 - pushIdx])
+  return stepCount;
 };
 // Returns the registry key whose value equals `actionVerb` (e.g. the adjustment
 // id for a script verb, or the filter key for a filter verb). Each registry's
