@@ -103,4 +103,80 @@ describe("features/scripting/action-file.js", () => {
     assert.equal(importedStep.enabled, true);
     assert.equal(importedStep.actionDescriptor.classID, "null");
   });
+
+  it("round-trips Unicode names, multiple actions and mixed step encodings with their flags", () => {
+    const set = sampleActionSet();
+    set.name = "Épreuves 🎨";
+    set.children[0].name = "調整";
+    set.children[0].index = 12;
+    set.children[0].shift = true;
+    set.children[0].commandKeyEnabled = true;
+    set.children[0].color = 5;
+    set.children[0].children.push({
+      expanded: true, enabled: false, dialogOptionsEnabled: true,
+      dialogOptions: 2, uf: "LqFy", eventClassName: "filter",
+    });
+    set.children.push({
+      index: 3, shift: false, commandKeyEnabled: false, color: 0,
+      name: "Empty", expanded: false, children: [],
+    });
+    const bytes = ActionParser.serialize(set);
+    const [imported] = ActionParser.parse(bytes);
+    assert.deepEqual(imported, set);
+    assert.deepEqual(new Uint8Array(ActionParser.serialize(imported)), new Uint8Array(bytes));
+  });
+
+  it("rejects a truncated header, Unicode field, action count and step descriptor", () => {
+    const sample = new Uint8Array(ActionParser.serialize(sampleActionSet()));
+    // Every fixture retains only tiny, known-good declared counts. Never feed
+    // the previous parser a large hostile count to obtain before evidence.
+    for (const end of [0, 3, 8, 24, sample.length - 1]) {
+      assert.throws(() => ActionParser.parse(sample.slice(0, end).buffer),
+        `truncated at byte ${end}`);
+    }
+  });
+
+  it("rejects an unsupported ATN version before reading the tree", () => {
+    const bytes = Uint8Array.from(SERIALIZED_EMPTY);
+    bytes[3] = 15;
+    assert.throws(() => ActionParser.parse(bytes.buffer), /version|action/i);
+  });
+
+  it("rejects a declared second action when only one action is present", () => {
+    const bytes = Uint8Array.from(SERIALIZED_SAMPLE);
+    bytes[26] = 2;
+    assert.throws(() => ActionParser.parse(bytes.buffer));
+  });
+
+  it("rejects missing empty-set flag and count bytes instead of importing an incomplete set", () => {
+    const bytes = Uint8Array.from(SERIALIZED_EMPTY);
+    for (const end of [8, 12, 13, 14, 15, 16]) {
+      assert.throws(() => ActionParser.parse(bytes.slice(0, end).buffer), `truncated at byte ${end}`);
+    }
+  });
+
+  it("rejects oversized outer names and record counts before allocating or iterating (after-only)", () => {
+    const fixture = sampleActionSet();
+    fixture.name = "E";
+    fixture.children[0].name = "";
+    const original = new Uint8Array(ActionParser.serialize(fixture));
+    // Offsets address set name/count, action name/step count, TEXT event
+    // length and event-class length. Guarded parser only: never execute these
+    // allocation/iteration hazards against its unsafe previous state.
+    for (const offset of [4, 13, 23, 30, 42, 49]) {
+      const bytes = original.slice();
+      bytes.fill(255, offset, offset + 4);
+      assert.throws(() => ActionParser.parse(bytes.buffer), /Invalid ATN/, `field at byte ${offset}`);
+    }
+  });
+
+  it("rejects missing Unicode terminators and an invalid descriptor marker", () => {
+    const empty = Uint8Array.from(SERIALIZED_EMPTY);
+    empty[11] = 1;
+    assert.throws(() => ActionParser.parse(empty.buffer), /Invalid ATN/);
+    const sample = Uint8Array.from(SERIALIZED_SAMPLE);
+    sample.fill(0, 81, 85);
+    sample[84] = 1;
+    assert.throws(() => ActionParser.parse(sample.buffer), /Invalid ATN/);
+  });
 });
