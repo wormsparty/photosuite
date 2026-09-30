@@ -70,6 +70,12 @@ function requireIntegerRange(value, min, max) {
   }
 }
 
+function requireFourAsciiBytes(value) {
+  if (typeof value !== "string" || value.length !== 4 || !/^[\x00-\x7f]{4}$/.test(value)) {
+    throw new Error("psd-descriptor: identifier must contain four ASCII bytes");
+  }
+}
+
 /**
  * Four-char keys that are nonetheless length-prefixed on the wire (their
  * meaning would otherwise be ambiguous with padded short keys).
@@ -326,6 +332,11 @@ function writeValue(buf, pos, node) {
   if (typeCode === "long") requireIntegerRange(value, -0x80000000, 0x7fffffff);
   if (typeCode === "rele") requireIntegerRange(value.val, -0x80000000, 0x7fffffff);
   if (typeCode === "indx") requireIntegerRange(value.val, 0, 0xffffffff);
+  if (typeCode === "UntF") requireFourAsciiBytes(value.type);
+  if (typeCode === "Pth ") requireFourAsciiBytes(value.sig);
+  if (typeCode === "ObAr") {
+    for (var channel of value.arr) requireFourAsciiBytes(channel.uID);
+  }
   BinaryUtils.writeAscii(buf, pos, typeCode);
   pos += 4;
   switch (typeCode) {

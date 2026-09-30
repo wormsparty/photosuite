@@ -61,6 +61,34 @@ describe("document/formats/psd/descriptor-codec.js", () => {
     }
   });
 
+  describe("fixed-width export fields", () => {
+    for (const value of ["", "abc", "abcde", "abcd\n", "éabc", undefined]) {
+      for (const type of ["UntF", "ObAr", "Pth "]) {
+        it(`${type} rejects invalid four-byte field ${String(value)}`, () => {
+          const v = type === "UntF" ? { type: value, val: 1 }
+            : type === "Pth " ? { sig: value, pth: "x" }
+              : { classID: "test", arr: [{ id: "x", type: "UnFl", uID: value, arr: [1] }] };
+          const buf = { data: new Uint8Array(1024).fill(165), ensureCapacity() {} };
+          assert.throws(() => DescriptorCodec.writeValue(buf, 0, { t: type, v }), /four ASCII bytes/);
+          assert.ok(buf.data.every((byte) => byte === 165), "invalid identifier leaves buffer unchanged");
+        });
+      }
+    }
+    it("rejects an invalid unit on a later empty object-array channel before mutation", () => {
+      const buf = { data: new Uint8Array(1024).fill(165), ensureCapacity() {} };
+      assert.throws(() => DescriptorCodec.writeValue(buf, 0, { t: "ObAr", v: {
+        classID: "test", arr: [{ id: "x", type: "UnFl", uID: "#Pxl", arr: [1] },
+          { id: "y", type: "UnFl", uID: "bad", arr: [] }],
+      } }), /four ASCII bytes/);
+      assert.ok(buf.data.every((byte) => byte === 165));
+    });
+    it("retains a valid unit field and the following list value", () => {
+      assertValueFixture({ t: "VlLs", v: [{ t: "UntF", v: { type: "#Pxl", val: 1.25 } },
+        { t: "long", v: 7 }] }, [...ascii("VlLs"), ...u32(2), ...ascii("UntF#Pxl"),
+      ...float64(1.25), ...ascii("long"), ...u32(7)]);
+    });
+  });
+
   describe("unsupported descriptor types", () => {
     for (const type of ["zzzz", "UnFl", "", "longer", undefined]) {
       it(`rejects unsupported writer type ${String(type)}`, () => {
