@@ -90,4 +90,17 @@ describe("features/scripting/action-file.js", () => {
     ActionParser.writeLengthPrefixedString(buffer, 0, "abcd");
     assert.equal(ActionParser.readLengthPrefixedString(buffer.data, 0), "abcd");
   });
+
+  it("round-trips a recorded step without an event class name", () => {
+    const actionSet = sampleActionSet();
+    const step = actionSet.children[0].children[0];
+    delete step.eventClassName;
+
+    const [imported] = ActionParser.parse(ActionParser.serialize(actionSet));
+    const importedStep = imported.children[0].children[0];
+    assert.equal(importedStep.uf, "set");
+    assert.equal(importedStep.eventClassName, "");
+    assert.equal(importedStep.enabled, true);
+    assert.equal(importedStep.actionDescriptor.classID, "null");
+  });
 });

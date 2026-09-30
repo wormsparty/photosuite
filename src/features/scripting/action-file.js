@@ -74,8 +74,9 @@ function writeActionStep(buffer, cursor, step) {
     BinaryUtils.writeAscii(buffer, cursor, step.uf);
     cursor += 4;
   }
-  ActionParser.writeLengthPrefixedString(buffer, cursor, step.eventClassName);
-  cursor += 4 + step.eventClassName.length;
+  const eventClassName = step.eventClassName ?? "";
+  ActionParser.writeLengthPrefixedString(buffer, cursor, eventClassName);
+  cursor += 4 + eventClassName.length;
   BinaryUtils.writeInt32(buffer, cursor, step.actionDescriptor ? -1 : 0);
   cursor += 4;
   if (step.actionDescriptor) {

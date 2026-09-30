@@ -159,7 +159,8 @@ function buildRecordedActionStep(eventData) {
     enabled: true,
     dialogOptionsEnabled: false,
     dialogOptions: 0,
-    uf: eventData.uf
+    uf: eventData.uf,
+    eventClassName: ""
   };
   if (eventData.actionDescriptor) {
     stepRecord.actionDescriptor = JSON.parse(JSON.stringify(eventData.actionDescriptor));
