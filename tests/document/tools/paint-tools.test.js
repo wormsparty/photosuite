@@ -15,6 +15,7 @@ let BrushTool;
 let GradientTool;
 let PaintBucketTool;
 let PaintTool;
+let Layer;
 
 function patchDomForInputHandler() {
 }
@@ -30,6 +31,10 @@ before(async () => {
   patchDomForInputHandler();
   await import("../../../src/document/tools/paint-tools.js");
   ({ BrushTool, GradientTool, PaintBucketTool, PaintTool } = await import("../../../src/document/tools/paint-tools.js"));
+  ({ Layer } = await import("../../../src/document/model/layer.js"));
+  const { TrackerRegistry } = await import("../../../src/features/trackers/tracker-registry.js");
+  const { registerTrackers } = await import("../../../src/features/trackers/register-trackers.js");
+  registerTrackers(TrackerRegistry);
 });
 
 after(() => {
@@ -149,6 +154,70 @@ it("red-eye channel payload matches the setChannelData {bounds, hslShift} contra
     assert.equal(maskTarget.maskTarget, mask);
     assert.equal(maskTarget.pixelBuffer, mask.channel);
     assert.equal(maskTarget.pixelContentKind, 1);
+  });
+
+  it("transparency-locked brush skips history and restores empty layer storage for an invisible stroke", () => {
+    const layer = new Layer();
+    layer.rect = new Rect(0, 0, 0, 0);
+    layer.buffer = allocBuffer(1);
+    layer.add.lspf = 1;
+    const originalBuffer = layer.buffer.slice();
+    const history = [];
+    const doc = {
+      width: 2,
+      height: 2,
+      layers: [layer],
+      selectedLayerIndices: [0],
+      activeChannels: [],
+      extraChannels: [],
+      selectionMask: null,
+      pathViewport: { channelVisibility: [1, 1, 1] },
+      root: { getExpandedDirtyRect: (rect) => rect },
+      markDirty() {},
+      pushHistory(entry) { history.push(entry); },
+    };
+    const tool = new BrushTool();
+    tool.capturePaintSourceBuffers(doc);
+    const strokeRect = new Rect(0, 0, 1, 1);
+    const redStroke = Uint8ClampedArray.from([255, 0, 0, 255]);
+    tool.compositeStrokeToLayer(doc, "draw", redStroke, strokeRect, strokeRect);
+    tool.finish(doc, strokeRect);
+
+    assert.equal(history.length, 0, "a stroke with no visible pixels must not add Undo history");
+    assert.deepEqual(layer.rect, new Rect(0, 0, 0, 0));
+    assert.deepEqual(layer.buffer, originalBuffer);
+  });
+
+  it("transparency-locked brush still paints and records history over opaque pixels", () => {
+    const layer = new Layer();
+    layer.rect = new Rect(0, 0, 2, 2);
+    layer.buffer = allocBuffer(16);
+    layer.buffer.set([255, 0, 0, 255]);
+    layer.add.lspf = 1;
+    const history = [];
+    const doc = {
+      width: 2,
+      height: 2,
+      layers: [layer],
+      selectedLayerIndices: [0],
+      activeChannels: [],
+      extraChannels: [],
+      selectionMask: null,
+      pathViewport: { channelVisibility: [1, 1, 1] },
+      root: { getExpandedDirtyRect: (rect) => rect },
+      markDirty() {},
+      pushHistory(entry) { history.push(entry); },
+    };
+    const tool = new BrushTool();
+    tool.capturePaintSourceBuffers(doc);
+    const strokeRect = new Rect(0, 0, 1, 1);
+    const greenStroke = Uint8ClampedArray.from([0, 255, 0, 255]);
+    tool.compositeStrokeToLayer(doc, "draw", greenStroke, strokeRect, strokeRect);
+    tool.finish(doc, strokeRect);
+
+    assert.equal(history.length, 1);
+    assert.deepEqual(Array.from(layer.buffer.slice(0, 4)), [0, 255, 0, 255]);
+    assert.deepEqual(layer.rect, new Rect(0, 0, 2, 2));
   });
 
   it("clone-overlay crosshair fill uses the (buffer, value) signature", () => {

@@ -798,6 +798,26 @@ PaintTool.prototype.finish = function(doc, dirtyRect, historyLabelKey, clearSele
     maskOrContentTarget = paintTarget.maskTarget,
     contentRect = maskOrContentTarget ? maskOrContentTarget.rect : targetLayer.rect,
     snapshotPixelBuffer;
+  if (pixelContentKind <= 0 && targetLayer.isLockBitSet(0)) {
+    const coveredRect = dirtyRect.intersect(this.sourceSampleRect);
+    let hasPaintablePixel = false;
+    for (let y = coveredRect.y; y < coveredRect.y + coveredRect.height && !hasPaintablePixel; y++) {
+      for (let x = coveredRect.x; x < coveredRect.x + coveredRect.width; x++) {
+        const alphaOffset = ((y - this.sourceSampleRect.y) * this.sourceSampleRect.width + x - this.sourceSampleRect.x) * 4 + 3;
+        if (this.sourcePixelBuffer[alphaOffset] !== 0) {
+          hasPaintablePixel = true;
+          break;
+        }
+      }
+    }
+    if (!hasPaintablePixel) {
+      targetLayer.buffer = this.sourcePixelBuffer;
+      targetLayer.rect = this.sourceSampleRect;
+      targetLayer.markDirty();
+      doc.markDirty();
+      return;
+    }
+  }
   if (this.usesPerPixelBuffer() || !contentRect.equals(this.sourceSampleRect)) {
     if (maskOrContentTarget == null) {
       if (this.usesPerPixelBuffer()) targetLayer.trimToContent();
@@ -1361,4 +1381,3 @@ PencilTool.prototype = Object.create(PaintTool.prototype);
 EraserTool.prototype = Object.create(PaintTool.prototype);
 BackgroundEraserTool.prototype = Object.create(PaintTool.prototype);
 installPaintSubclassPrototypes();
-
