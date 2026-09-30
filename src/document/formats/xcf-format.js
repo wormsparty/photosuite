@@ -47,6 +47,31 @@ function idReader(idSize) {
   return idSize == 4 ? BinaryUtils.readUint32BE : BinaryUtils.readInt64BE;
 }
 
+/** Reject incomplete fields before unchecked shared binary readers see them. */
+function requireBytes(bytes, offset, size, endOffset = bytes.length) {
+  if (!Number.isSafeInteger(offset) || !Number.isSafeInteger(size) || offset < 0 || size < 0 || offset > endOffset || size > endOffset - offset) {
+    throw new RangeError("xcf: truncated or invalid metadata range");
+  }
+}
+
+/** XCF strings include a length prefix and, when nonempty, a trailing NUL. */
+function readXcfString(bytes, offset, endOffset = bytes.length) {
+  requireBytes(bytes, offset, 4, endOffset);
+  var size = BinaryUtils.readUint32BE(bytes, offset);
+  requireBytes(bytes, offset + 4, size, endOffset);
+  if (size > 0 && bytes[offset + 3 + size] != 0) throw new RangeError("xcf: unterminated string");
+  return BinaryUtils.readLengthPrefixedUtf8(bytes, offset);
+}
+
+/** Read an offset field, rejecting pointers that cannot address this file. */
+function readOffset(bytes, offset, idSize, required = false) {
+  requireBytes(bytes, offset, idSize);
+  var id = idReader(idSize)(bytes, offset);
+  if (required && id == 0) throw new RangeError("xcf: missing required data offset");
+  if (id != 0) requireBytes(bytes, id, 1);
+  return id;
+}
+
 /**
  * Parse an XCF buffer into the document's layer stack.
  * @param {ArrayBuffer} arrayBuffer
@@ -54,6 +79,7 @@ function idReader(idSize) {
  */
 function parse(arrayBuffer, doc) {
   var bytes = new Uint8Array(arrayBuffer);
+  requireBytes(bytes, 0, 26);
   var offset = 0;
   var idSize = 4;
   var bitDepth = 100;
@@ -69,6 +95,7 @@ function parse(arrayBuffer, doc) {
   offset += 4;
   if (colorMode != 0) alert("Unsupported image format, not RGB!");
   if (["file", "v001", "v002", "v003"].indexOf(versionTag) == -1) {
+    requireBytes(bytes, offset, 4);
     bitDepth = BinaryUtils.readUint32BE(bytes, offset);
     offset += 4;
     if (parseInt(versionTag.slice(1)) < 7) alert("Unknown XCF version: " + versionTag);
@@ -105,6 +132,7 @@ function parse(arrayBuffer, doc) {
 
 /** Read one layer (header, properties, text, pixel data) and push it. */
 function readLayer(bytes, offset, doc, compressionProps, idSize, bitDepth) {
+  requireBytes(bytes, offset, 12);
   var layer = doc.newLayer();
   var layerWidth = BinaryUtils.readUint32BE(bytes, offset);
   offset += 4;
@@ -113,7 +141,7 @@ function readLayer(bytes, offset, doc, compressionProps, idSize, bitDepth) {
   layer.rect = new Rect(0, 0, layerWidth, layerHeight);
   var baseType = BinaryUtils.readUint32BE(bytes, offset);
   offset += 4;
-  var layerName = BinaryUtils.readLengthPrefixedUtf8(bytes, offset);
+  var layerName = readXcfString(bytes, offset);
   offset += layerName.size;
   layer.setName(layerName.str);
 
@@ -171,13 +199,13 @@ function applyLayerProps(layer, props) {
 
 /** Read a layer's tiled pixel data and optional layer mask. */
 function readLayerPixelData(bytes, offset, layer, props, compressionProps, idSize, bitDepth) {
+  var pixelDataOffset = readOffset(bytes, offset, idSize, true);
+  offset += idSize;
+  var maskChannelId = readOffset(bytes, offset, idSize);
+  offset += idSize;
+  requireBytes(bytes, pixelDataOffset, 12 + idSize);
   layer.buffer = allocBuffer(layer.rect.area() * 4);
   var planarPixels = new PlanarRgbaBuffer(layer.rect.area());
-  var readId = idReader(idSize);
-  var pixelDataOffset = readId(bytes, offset);
-  offset += idSize;
-  var maskChannelId = readId(bytes, offset);
-  offset += idSize;
   readHierarchicalPixelData(bytes, pixelDataOffset, planarPixels, compressionProps, idSize, bitDepth);
   planarToInterleaved(planarPixels, layer.buffer);
   if (maskChannelId == 0) return;
@@ -330,36 +358,40 @@ function parseSExprTokens(source, pos, outTokens) {
 
 /** Read a channel (name, properties, pixel plane) at `offset`. */
 function readChannel(bytes, offset, compressionProps, idSize, bitDepth) {
+  requireBytes(bytes, offset, 8);
   var channelWidth = BinaryUtils.readUint32BE(bytes, offset);
   offset += 4;
   var channelHeight = BinaryUtils.readUint32BE(bytes, offset);
   offset += 4;
-  var channelName = BinaryUtils.readLengthPrefixedUtf8(bytes, offset);
+  var channelName = readXcfString(bytes, offset);
   offset += channelName.size;
   var properties = {};
   offset = readPropertyList(bytes, offset, properties);
-  var planarBuffer = new PlanarRgbaBuffer(channelWidth * channelHeight);
-  var pixelDataOffset = idReader(idSize)(bytes, offset);
+  var pixelDataOffset = readOffset(bytes, offset, idSize, true);
   offset += idSize;
+  requireBytes(bytes, pixelDataOffset, 12 + idSize);
+  var planarBuffer = new PlanarRgbaBuffer(channelWidth * channelHeight);
   readHierarchicalPixelData(bytes, pixelDataOffset, planarBuffer, compressionProps, idSize, bitDepth);
   return { channelPlane: planarBuffer.h, properties: properties };
 }
 
 /** Read a hierarchy header and decode its level-0 tiled channel data. */
 function readHierarchicalPixelData(bytes, offset, planarBuffer, compressionProps, idSize, bitDepth) {
+  requireBytes(bytes, offset, 12 + idSize);
   var tileWidth = BinaryUtils.readUint32BE(bytes, offset);
   offset += 4;
   var tileHeight = BinaryUtils.readUint32BE(bytes, offset);
   offset += 4;
   var bytesPerPixel = BinaryUtils.readUint32BE(bytes, offset);
   offset += 4;
-  var tiledDataOffset = idReader(idSize)(bytes, offset);
+  var tiledDataOffset = readOffset(bytes, offset, idSize, true);
   offset += idSize;
   decodeTiledChannelData(bytes, tiledDataOffset, planarBuffer, compressionProps, bytesPerPixel, idSize, bitDepth);
 }
 
 /** Decode a tiled channel level into a planar RGBA buffer. */
 function decodeTiledChannelData(bytes, offset, planarBuffer, compressionProps, bytesPerPixel, idSize, bitDepth) {
+  requireBytes(bytes, offset, 8);
   var imageWidth = BinaryUtils.readUint32BE(bytes, offset);
   offset += 4;
   var imageHeight = BinaryUtils.readUint32BE(bytes, offset);
@@ -371,6 +403,9 @@ function decodeTiledChannelData(bytes, offset, planarBuffer, compressionProps, b
 
   var tileIds = [];
   offset = readIdList(bytes, offset, tileIds, idSize);
+  if (tileIds.length != Math.ceil(imageWidth / TILE_SIZE) * Math.ceil(imageHeight / TILE_SIZE)) {
+    throw new RangeError("xcf: invalid tile offset count");
+  }
   var tilePlanar = new PlanarRgbaBuffer(TILE_SIZE * TILE_SIZE * channelCount);
   var tileBounds = new Rect;
   var compressionType = compressionProps[XcfPropType.PROP_COMPRESSION][0];
@@ -505,9 +540,8 @@ function decodeZlibTile(bytes, offset, byteLength, channelSlices) {
 
 /** Read a zero-terminated list of id-sized ids into `outIds`. */
 function readIdList(bytes, offset, outIds, idSize) {
-  var readId = idReader(idSize);
   while (true) {
-    var id = readId(bytes, offset);
+    var id = readOffset(bytes, offset, idSize);
     offset += idSize;
     if (id == 0) break;
     outIds.push(id);
@@ -518,11 +552,23 @@ function readIdList(bytes, offset, outIds, idSize) {
 /** Read a property list (type, size, payload) until PROP_END. */
 function readPropertyList(bytes, offset, outProps) {
   while (true) {
+    requireBytes(bytes, offset, 8);
     var propType = BinaryUtils.readUint32BE(bytes, offset);
     offset += 4;
     var propSize = BinaryUtils.readUint32BE(bytes, offset);
     offset += 4;
-    if (propType == XcfPropType.PROP_END) break;
+    requireBytes(bytes, offset, propSize);
+    if (propType == XcfPropType.PROP_END) {
+      if (propSize != 0) throw new RangeError("xcf: invalid end property size");
+      break;
+    }
+    var minimumSize = propType == XcfPropType.PROP_COMPRESSION ? 1 :
+      propType == XcfPropType.PROP_OFFSETS ? 8 :
+      [XcfPropType.PROP_OPACITY, XcfPropType.PROP_MODE, XcfPropType.PROP_VISIBLE,
+        XcfPropType.PROP_APPLY_MASK, XcfPropType.PROP_GROUP_ITEM_FLAGS, XcfPropType.PROP_ITEM_PATH].includes(propType) ? 4 : 0;
+    if (propSize < minimumSize || propType == XcfPropType.PROP_ITEM_PATH && propSize % 4 != 0) {
+      throw new RangeError("xcf: invalid property size");
+    }
     if (propType == XcfPropType.PROP_PARASITES) outProps[propType] = readParasiteMap(bytes, offset, offset + propSize);
     else outProps[propType] = BinaryUtils.readBytes(bytes, offset, propSize);
     offset += propSize;
@@ -534,13 +580,15 @@ function readPropertyList(bytes, offset, outProps) {
 function readParasiteMap(bytes, offset, endOffset) {
   var parasites = {};
   while (offset < endOffset) {
-    var nameEntry = BinaryUtils.readLengthPrefixedUtf8(bytes, offset);
+    var nameEntry = readXcfString(bytes, offset, endOffset);
     offset += nameEntry.size;
+    requireBytes(bytes, offset, 8, endOffset);
     var flags = BinaryUtils.readUint32BE(bytes, offset);
     offset += 4;
     if (flags != 1) console.log("unknown flags", flags);
     var dataSize = BinaryUtils.readUint32BE(bytes, offset);
     offset += 4;
+    requireBytes(bytes, offset, dataSize, endOffset);
     parasites[nameEntry.str] = BinaryUtils.readBytes(bytes, offset, dataSize);
     offset += dataSize;
   }
