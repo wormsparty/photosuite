@@ -157,7 +157,8 @@ function readValue(data, pos, debug, depth) {
       break;
     case "comp":
       requireBytes(data, pos, 8);
-      result.v = BinaryUtils.readInt32BE(data, pos + 4);
+      result.v = BinaryUtils.readInt32BE(data, pos) * 0x100000000 + BinaryUtils.readUint32BE(data, pos + 4);
+      if (!Number.isSafeInteger(result.v)) throw new Error("psd-descriptor: integer outside exact Number range");
       pos += 8;
       break;
     case "Objc":
@@ -330,7 +331,9 @@ function writeValue(buf, pos, node) {
       pos += 4;
       break;
     case "comp":
-      BinaryUtils.writeInt32(buf, pos + 4, value);
+      if (!Number.isSafeInteger(value)) throw new Error("psd-descriptor: integer outside exact Number range");
+      BinaryUtils.writeInt32(buf, pos, Math.floor(value / 0x100000000));
+      BinaryUtils.writeSize(buf, pos + 4, ((value % 0x100000000) + 0x100000000) % 0x100000000);
       pos += 8;
       break;
     case "Objc":

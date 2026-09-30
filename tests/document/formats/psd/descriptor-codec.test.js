@@ -63,6 +63,56 @@ describe("document/formats/psd/descriptor-codec.js", () => {
     assert.equal(node.size, 8);
   });
 
+  describe("signed integer widths", () => {
+  // Signed 64-bit wire fixtures use BigInt only to generate independent bytes;
+  // application descriptors retain exact, safe JavaScript Number values.
+  const int64 = (n) => {
+    const data = new Uint8Array(8);
+    new DataView(data.buffer).setBigInt64(0, BigInt(n));
+    return [...data];
+  };
+  for (const value of [0, -1, -2147483649, 2147483648, 4294967296, -4294967296,
+    Number.MAX_SAFE_INTEGER, Number.MIN_SAFE_INTEGER]) {
+    it(`comp reads the complete signed 64-bit value ${value}`, () => {
+      const data = new Uint8Array([...ascii("comp"), ...int64(value)]);
+      assert.deepEqual(DescriptorCodec.readValue(data, 0), { t: "comp", v: value, size: 12 });
+    });
+    it(`comp writes both integer words for ${value}`, () => {
+      assert.deepEqual(encodeValue({ t: "comp", v: value }),
+        new Uint8Array([...ascii("comp"), ...int64(value)]));
+    });
+  }
+
+  for (const value of [-2147483648, -1, 0, 2147483647]) {
+    it(`long retains signed 32-bit boundary ${value}`, () => {
+      assertValueFixture({ t: "long", v: value }, [...ascii("long"), ...u32(value)]);
+    });
+  }
+
+  it("rejects signed 64-bit values outside exact Number precision", () => {
+    for (const value of [9007199254740992n, -9007199254740992n,
+      9223372036854775807n, -9223372036854775808n]) {
+      assert.throws(() => DescriptorCodec.readValue(
+        new Uint8Array([...ascii("comp"), ...int64(value)]), 0), /safe integer|precision|range/i);
+    }
+  });
+
+  it("rejects invalid comp exports instead of truncating them", () => {
+    for (const value of [Number.MAX_SAFE_INTEGER + 1, Number.MIN_SAFE_INTEGER - 1,
+      1.5, NaN, Infinity, -Infinity, "42", 42n]) {
+      assert.throws(() => encodeValue({ t: "comp", v: value }), /safe integer|precision|range/i);
+    }
+  });
+
+  it("comp overwrites a reused buffer's high word", () => {
+    const buf = { data: new Uint8Array(16).fill(255), ensureCapacity() {} };
+    assert.equal(DescriptorCodec.writeValue(buf, 0, { t: "comp", v: 42 }), 12);
+    assert.deepEqual(buf.data.slice(0, 12), new Uint8Array([...ascii("comp"), ...int64(42)]));
+    assert.deepEqual(buf.data.slice(12), new Uint8Array(4).fill(255));
+  });
+
+  });
+
   it("flattenDescriptor recursively strips type tags (Objc/VlLs/UntF)", () => {
     const desc = {
       classID: "Foo",
