@@ -21,7 +21,7 @@ function fixture({ width = 1, idSize = 4, layerProperties = Buffer.alloc(0), til
   const id = idSize == 4 ? u32 : u64;
   const name = Buffer.from("Tiny\0");
   const header = Buffer.concat([Buffer.from(idSize == 4 ? "gimp xcf v003\0" : "gimp xcf v012\0"), u32(width), u32(1), u32(0),
-    ...(idSize == 8 ? [u32(100)] : []), property(17, Buffer.from([1])), end]);
+    ...(idSize == 8 ? [u32(150)] : []), property(17, Buffer.from([1])), end]);
   const layerOffset = header.length + 3 * idSize;
   const layerNameOffset = layerOffset + 12;
   const layerPropertyOffset = layerNameOffset + 4 + name.length;

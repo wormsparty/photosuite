@@ -6,7 +6,7 @@ const name = s => { const b = Buffer.from(s + "\0"); return Buffer.concat([u32(b
 // Tiny synthetic fixtures exercise parser semantics, not GIMP interoperability.
 export function fixture({ idSize = 4, colorMode = 0, baseType = 1, pixels = [23, 61, 107, 255],
   palette = [23, 61, 107, 199, 151, 73], group = false, mode = 0, mask = false,
-  applyMask = true, offsets = [3, 5], bpp = pixels.length, path = [0], flags = 1, maskBpp = 1, precision = 100,
+  applyMask = true, offsets = [3, 5], bpp = pixels.length, path = [0], flags = 1, maskBpp = 1, precision = 150,
   version = idSize === 4 ? 3 : 12 } = {}) {
   const id = idSize === 4 ? u32 : u64;
   const versionTag = version === 0 ? "file" : "v" + String(version).padStart(3, "0");
@@ -43,7 +43,7 @@ export function parse(bytes, XCFParser, Layer, LayerSectionType) {
 export function stackFixture({ idSize = 4, layers = [] } = {}) {
   const id = idSize === 4 ? u32 : u64;
   const header = Buffer.concat([Buffer.from(idSize === 4 ? "gimp xcf v003\0" : "gimp xcf v011\0"),
-    u32(1), u32(1), u32(0), ...(idSize === 8 ? [u32(100)] : []), prop(17, Buffer.from([0])), prop(0)]);
+    u32(1), u32(1), u32(0), ...(idSize === 8 ? [u32(150)] : []), prop(17, Buffer.from([0])), prop(0)]);
   let cursor = header.length + idSize * (layers.length + 2);
   const pointers = [], objects = [];
   for (const { group = false, flags, path = [0], title = "Tiny" } of layers) {

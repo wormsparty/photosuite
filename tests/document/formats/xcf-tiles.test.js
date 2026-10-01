@@ -23,7 +23,7 @@ const end = Buffer.alloc(8);
 const property = (type, bytes) => Buffer.concat([u32(type), u32(bytes.length), bytes]);
 
 // Independent tiny fixtures use no application encoder. Dimensions stay at most 65×1.
-function fixture({ width = 1, idSize = 4, compression = 2, precision = 100, samples = 4, layerProperties = Buffer.alloc(0), tile = Buffer.from([0, 23, 0, 61, 0, 107, 0, 255]) } = {}) {
+function fixture({ width = 1, idSize = 4, compression = 2, precision = 150, samples = 4, layerProperties = Buffer.alloc(0), tile = Buffer.from([0, 23, 0, 61, 0, 107, 0, 255]) } = {}) {
   const id = idSize == 4 ? u32 : u64;
   const name = Buffer.from("Tiny\0");
   const header = Buffer.concat([Buffer.from(idSize == 4 ? "gimp xcf v003\0" : "gimp xcf v012\0"), u32(width), u32(1), u32(0),

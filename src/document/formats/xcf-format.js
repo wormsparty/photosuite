@@ -107,7 +107,7 @@ function parse(arrayBuffer, doc) {
   requireBytes(bytes, 0, 26);
   var offset = 0;
   var idSize = 4;
-  var bitDepth = 100;
+  var bitDepth = 150;
   if (BinaryUtils.readString(bytes, 0, 9) != "gimp xcf " || bytes[13] != 0) {
     throw new RangeError("xcf: invalid file signature");
   }
@@ -295,7 +295,8 @@ function readLayerPixelData(bytes, offset, layer, props, compressionProps, idSiz
   reserveDecodedBytes(budget, layer.rect.area() * 4 + temporaryBytes);
   layer.buffer = allocBuffer(layer.rect.area() * 4);
   var planarPixels = new PlanarRgbaBuffer(layer.rect.area());
-  readHierarchicalPixelData(bytes, pixelDataOffset, planarPixels, compressionProps, idSize, bitDepth);
+  var colorSamples = baseType < 2 ? 3 : baseType < 4 ? 1 : 0;
+  readHierarchicalPixelData(bytes, pixelDataOffset, planarPixels, compressionProps, idSize, bitDepth, colorSamples);
   if (baseType >= 2) {
     var colormap = compressionProps[XcfPropType.PROP_COLORMAP];
     for (var px = 0; px < layer.rect.area(); px++) {
@@ -533,7 +534,7 @@ function validatePixelLayout(bytes, offset, width, height, idSize, bitDepth, exp
 }
 
 /** Read a hierarchy header and decode its level-0 tiled channel data. */
-function readHierarchicalPixelData(bytes, offset, planarBuffer, compressionProps, idSize, bitDepth) {
+function readHierarchicalPixelData(bytes, offset, planarBuffer, compressionProps, idSize, bitDepth, colorSamples = 0) {
   requireBytes(bytes, offset, 12 + idSize);
   var tileWidth = BinaryUtils.readUint32BE(bytes, offset);
   offset += 4;
@@ -543,11 +544,11 @@ function readHierarchicalPixelData(bytes, offset, planarBuffer, compressionProps
   offset += 4;
   var tiledDataOffset = readOffset(bytes, offset, idSize, true);
   offset += idSize;
-  decodeTiledChannelData(bytes, tiledDataOffset, planarBuffer, compressionProps, bytesPerPixel, idSize, bitDepth);
+  decodeTiledChannelData(bytes, tiledDataOffset, planarBuffer, compressionProps, bytesPerPixel, idSize, bitDepth, colorSamples);
 }
 
 /** Decode a tiled channel level into a planar RGBA buffer. */
-function decodeTiledChannelData(bytes, offset, planarBuffer, compressionProps, bytesPerPixel, idSize, bitDepth) {
+function decodeTiledChannelData(bytes, offset, planarBuffer, compressionProps, bytesPerPixel, idSize, bitDepth, colorSamples) {
   requireBytes(bytes, offset, 8);
   var imageWidth = BinaryUtils.readUint32BE(bytes, offset);
   offset += 4;
@@ -580,7 +581,13 @@ function decodeTiledChannelData(bytes, offset, planarBuffer, compressionProps, b
       var tileEnd = tileIndex < tileIds.length ? tileIds[tileIndex] : bytes.length;
       readTilePixels(bytes, tileOffset, pixelCount * channelCount, compressionType, sampleCount, channelSlices, tileEnd);
       if (bitDepth == 100 || bitDepth == 150) {
-        // 8-bit samples: no unpacking needed.
+        if (bitDepth == 100) {
+          for (var ch = 0; ch < colorSamples; ch++) {
+            for (var px = 0; px < pixelCount; px++) {
+              channelSlices[ch][px] = Math.round(255 * linearToSrgb(channelSlices[ch][px] / 255));
+            }
+          }
+        }
       } else if (bitDepth == 250) {
         unpack16BitTo8(channelSlices, sampleCount, pixelCount);
       } else if (bitDepth == 600) {
