@@ -591,7 +591,7 @@ function decodeTiledChannelData(bytes, offset, planarBuffer, compressionProps, b
       } else if (bitDepth == 250) {
         unpack16BitTo8(channelSlices, sampleCount, pixelCount);
       } else if (bitDepth == 600) {
-        unpackHdrFloatTo8(channelSlices, sampleCount, pixelCount);
+        unpackHdrFloatTo8(channelSlices, sampleCount, pixelCount, colorSamples);
       } else {
         console.log("unknown data format", bitDepth);
       }
@@ -611,8 +611,8 @@ function unpack16BitTo8(channelSlices, sampleCount, pixelCount) {
   }
 }
 
-/** Collapse 32-bit float samples to sRGB 8-bit via the HDR lookup table. */
-function unpackHdrFloatTo8(channelSlices, sampleCount, pixelCount) {
+/** Convert linear float colors to sRGB bytes and keep alpha/mask coverage linear. */
+function unpackHdrFloatTo8(channelSlices, sampleCount, pixelCount, colorSamples) {
   var hdrLut = getHdrFloatByteLut();
   var floatBits = new Uint32Array(1);
   var floatView = new Float32Array(floatBits.buffer);
@@ -623,7 +623,7 @@ function unpackHdrFloatTo8(channelSlices, sampleCount, pixelCount) {
       var floatVal = floatView[0];
       if (floatVal < 0) floatVal = 0;
       else if (floatVal > 1) floatVal = 1;
-      channelData[px] = hdrLut[~~(.5 + floatVal * 1e3)];
+      channelData[px] = ch < colorSamples ? hdrLut[~~(.5 + floatVal * 1e3)] : Math.round(floatVal * 255);
     }
   }
 }
