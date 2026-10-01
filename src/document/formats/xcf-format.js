@@ -121,7 +121,7 @@ function parse(arrayBuffer, doc) {
   reserveDecodedBytes(budget, doc.width * doc.height * 4);
   var colorMode = BinaryUtils.readUint32BE(bytes, offset);
   offset += 4;
-  if (colorMode != 0) alert("Unsupported image format, not RGB!");
+  if (colorMode > 2) throw new RangeError("xcf: unsupported image color mode");
   if (["file", "v001", "v002", "v003"].indexOf(versionTag) == -1) {
     requireBytes(bytes, offset, 4);
     bitDepth = BinaryUtils.readUint32BE(bytes, offset);
@@ -129,9 +129,23 @@ function parse(arrayBuffer, doc) {
     if (parseInt(versionTag.slice(1)) < 7) alert("Unknown XCF version: " + versionTag);
     idSize = 8;
   }
+  // Multi-byte grayscale needs color/coverage-specific transfer conversion;
+  // reject it until the decoder supports those semantics explicitly.
+  if (colorMode == 1 && bitDepth != 100 && bitDepth != 150) {
+    throw new RangeError("xcf: unsupported grayscale precision");
+  }
 
   var compressionProps = {};
   offset = readPropertyList(bytes, offset, compressionProps);
+  var colormap = compressionProps[XcfPropType.PROP_COLORMAP];
+  if (colorMode == 2) {
+    if (!colormap || colormap.length < 4) throw new RangeError("xcf: missing indexed colormap");
+    var colorCount = BinaryUtils.readUint32BE(colormap, 0);
+    if (colorCount < 1 || colorCount > 256 || colormap.length != 4 + colorCount * 3) {
+      throw new RangeError("xcf: invalid indexed colormap");
+    }
+    if (bitDepth != 100 && bitDepth != 150) throw new RangeError("xcf: unsupported indexed precision");
+  }
   var layerIds = [];
   offset = readIdList(bytes, offset, layerIds, idSize);
   var channelIds = [];
@@ -139,7 +153,7 @@ function parse(arrayBuffer, doc) {
 
   doc.openGroupDepth = 0;
   for (var layerIdx = 0; layerIdx < layerIds.length; layerIdx++) {
-    readLayer(bytes, layerIds[layerIdx], doc, compressionProps, idSize, bitDepth, budget);
+    readLayer(bytes, layerIds[layerIdx], doc, compressionProps, idSize, bitDepth, budget, colorMode);
   }
   while (doc.openGroupDepth > 0) {
     doc.layers.push(doc.createGroupEndLayer());
@@ -159,7 +173,7 @@ function parse(arrayBuffer, doc) {
 }
 
 /** Read one layer (header, properties, text, pixel data) and push it. */
-function readLayer(bytes, offset, doc, compressionProps, idSize, bitDepth, budget) {
+function readLayer(bytes, offset, doc, compressionProps, idSize, bitDepth, budget, colorMode) {
   requireBytes(bytes, offset, 12);
   var layer = doc.newLayer();
   var layerWidth = BinaryUtils.readUint32BE(bytes, offset);
@@ -169,6 +183,7 @@ function readLayer(bytes, offset, doc, compressionProps, idSize, bitDepth, budge
   layer.rect = new Rect(0, 0, layerWidth, layerHeight);
   var baseType = BinaryUtils.readUint32BE(bytes, offset);
   offset += 4;
+  if (baseType > 5 || Math.floor(baseType / 2) != colorMode) throw new RangeError("xcf: layer color type mismatch");
   var layerName = readXcfString(bytes, offset);
   offset += layerName.size;
   layer.setName(layerName.str);
@@ -196,7 +211,8 @@ function readLayer(bytes, offset, doc, compressionProps, idSize, bitDepth, budge
 
   if (layer.hasPixelData()) {
     validateDimensions(layerWidth, layerHeight);
-    readLayerPixelData(bytes, offset, layer, props, compressionProps, idSize, bitDepth, budget);
+    readLayerPixelData(bytes, offset, layer, props, compressionProps, idSize, bitDepth, budget, baseType);
+
   }
   doc.layers.push(layer);
 }
@@ -229,17 +245,35 @@ function applyLayerProps(layer, props) {
 }
 
 /** Read a layer's tiled pixel data and optional layer mask. */
-function readLayerPixelData(bytes, offset, layer, props, compressionProps, idSize, bitDepth, budget) {
+function readLayerPixelData(bytes, offset, layer, props, compressionProps, idSize, bitDepth, budget, baseType) {
   var pixelDataOffset = readOffset(bytes, offset, idSize, true);
   offset += idSize;
   var maskChannelId = readOffset(bytes, offset, idSize);
   offset += idSize;
-  validatePixelLayout(bytes, pixelDataOffset, layer.rect.width, layer.rect.height, idSize, bitDepth);
+  var sampleCount = [3, 4, 1, 2, 1, 2][baseType];
+  validatePixelLayout(bytes, pixelDataOffset, layer.rect.width, layer.rect.height, idSize, bitDepth, sampleCount);
   var temporaryBytes = planeBytes(layer.rect.area()) * 4;
   reserveDecodedBytes(budget, layer.rect.area() * 4 + temporaryBytes);
   layer.buffer = allocBuffer(layer.rect.area() * 4);
   var planarPixels = new PlanarRgbaBuffer(layer.rect.area());
   readHierarchicalPixelData(bytes, pixelDataOffset, planarPixels, compressionProps, idSize, bitDepth);
+  if (baseType >= 2) {
+    var colormap = compressionProps[XcfPropType.PROP_COLORMAP];
+    for (var px = 0; px < layer.rect.area(); px++) {
+      var value = planarPixels.h[px];
+      planarPixels.w[px] = baseType % 2 ? planarPixels.l[px] : 255;
+      if (baseType < 4) {
+        planarPixels.l[px] = value;
+        planarPixels.O[px] = value;
+      } else {
+        var paletteOffset = 4 + value * 3;
+        if (paletteOffset + 3 > colormap.length) throw new RangeError("xcf: palette index out of range");
+        planarPixels.h[px] = colormap[paletteOffset];
+        planarPixels.l[px] = colormap[paletteOffset + 1];
+        planarPixels.O[px] = colormap[paletteOffset + 2];
+      }
+    }
+  }
   planarToInterleaved(planarPixels, layer.buffer);
   if (maskChannelId == 0) {
     budget.used -= temporaryBytes;
@@ -429,7 +463,7 @@ function readChannel(bytes, offset, compressionProps, idSize, bitDepth, budget, 
   }
   var pixelDataOffset = readOffset(bytes, offset, idSize, true);
   offset += idSize;
-  validatePixelLayout(bytes, pixelDataOffset, channelWidth, channelHeight, idSize, bitDepth);
+  validatePixelLayout(bytes, pixelDataOffset, channelWidth, channelHeight, idSize, bitDepth, 1);
   var channelPlaneBytes = planeBytes(channelWidth * channelHeight);
   reserveDecodedBytes(budget, channelPlaneBytes * 4);
   var planarBuffer = new PlanarRgbaBuffer(channelWidth * channelHeight);
@@ -439,7 +473,7 @@ function readChannel(bytes, offset, compressionProps, idSize, bitDepth, budget, 
 }
 
 /** Validate hierarchy and level metadata before allocating destination planes. */
-function validatePixelLayout(bytes, offset, width, height, idSize, bitDepth) {
+function validatePixelLayout(bytes, offset, width, height, idSize, bitDepth, expectedSamples) {
   requireBytes(bytes, offset, 12 + idSize);
   if (BinaryUtils.readUint32BE(bytes, offset) != width || BinaryUtils.readUint32BE(bytes, offset + 4) != height) {
     throw new RangeError("xcf: hierarchy dimensions mismatch");
@@ -449,6 +483,7 @@ function validatePixelLayout(bytes, offset, width, height, idSize, bitDepth) {
   if (bytesPerPixel % sampleBytes != 0 || bytesPerPixel < sampleBytes || bytesPerPixel > sampleBytes * 4) {
     throw new RangeError("xcf: invalid pixel channel layout");
   }
+  if (bytesPerPixel != sampleBytes * expectedSamples) throw new RangeError("xcf: pixel channel type mismatch");
   var levelOffset = readOffset(bytes, offset + 12, idSize, true);
   requireBytes(bytes, levelOffset, 8);
   if (BinaryUtils.readUint32BE(bytes, levelOffset) != width || BinaryUtils.readUint32BE(bytes, levelOffset + 4) != height) {
