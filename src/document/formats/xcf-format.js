@@ -331,7 +331,13 @@ function readLayerMask(bytes, maskChannelId, layer, props, compressionProps, idS
   layer.d = new Mask;
   layer.d.color = 0;
   layer.d.rect = rect.clone();
-  layer.d.channel = readChannel(bytes, maskChannelId, compressionProps, idSize, bitDepth, budget, rect.width, rect.height).channelPlane;
+  // Group masks may have their own stored dimensions; raster masks must match
+  // the owning layer. Both use the owner's document-space origin.
+  var channel = readChannel(bytes, maskChannelId, compressionProps, idSize, bitDepth, budget,
+    layer.isGroup() ? undefined : rect.width, layer.isGroup() ? undefined : rect.height);
+  layer.d.rect.width = channel.width;
+  layer.d.rect.height = channel.height;
+  layer.d.channel = channel.channelPlane;
   if (props[XcfPropType.PROP_APPLY_MASK]) {
     layer.d.isEnabled = BinaryUtils.readUint32BE(props[XcfPropType.PROP_APPLY_MASK], 0) == 1;
   }
@@ -517,7 +523,7 @@ function readChannel(bytes, offset, compressionProps, idSize, bitDepth, budget, 
   var planarBuffer = new PlanarRgbaBuffer(channelWidth * channelHeight);
   readHierarchicalPixelData(bytes, pixelDataOffset, planarBuffer, compressionProps, idSize, bitDepth);
   budget.used -= channelPlaneBytes * 3;
-  return { channelPlane: planarBuffer.h, properties: properties };
+  return { channelPlane: planarBuffer.h, properties: properties, width: channelWidth, height: channelHeight };
 }
 
 /** Validate hierarchy and level metadata before allocating destination planes. */

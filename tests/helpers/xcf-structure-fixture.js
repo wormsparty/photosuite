@@ -7,29 +7,30 @@ const name = s => { const b = Buffer.from(s + "\0"); return Buffer.concat([u32(b
 export function fixture({ idSize = 4, colorMode = 0, baseType = 1, pixels = [23, 61, 107, 255],
   palette = [23, 61, 107, 199, 151, 73], group = false, mode = 0, mask = false,
   applyMask = true, offsets = [3, 5], bpp = pixels.length, path = [0], flags = 1, maskBpp = 1, precision = 150,
-  version = idSize === 4 ? 3 : 12 } = {}) {
+  version = idSize === 4 ? 3 : 12, width = 1, height = 1,
+  maskWidth = width, maskHeight = height, maskPixels = [89] } = {}) {
   const id = idSize === 4 ? u32 : u64;
   const versionTag = version === 0 ? "file" : "v" + String(version).padStart(3, "0");
   const header = Buffer.concat([Buffer.from("gimp xcf " + versionTag + "\0"),
-    u32(1), u32(1), u32(colorMode), ...(version >= 4 ? [u32(precision)] : []),
+    u32(width), u32(height), u32(colorMode), ...(version >= 4 ? [u32(precision)] : []),
     prop(17, Buffer.from([0])), ...(colorMode === 2 && palette != null ? [prop(1, Buffer.concat([u32(palette.length / 3), Buffer.from(palette)]))] : []), prop(0)]);
   const objectOffset = header.length + idSize * 3;
-  const object = Buffer.concat([u32(1), u32(1), u32(baseType), name("Tiny"),
+  const object = Buffer.concat([u32(width), u32(height), u32(baseType), name("Tiny"),
     prop(15, Buffer.concat(offsets.map(u32))), prop(7, u32(mode)), prop(30, Buffer.concat(path.map(u32))),
     ...(group ? [prop(29), prop(31, u32(flags))] : []), ...(mask ? [prop(11, u32(applyMask ? 1 : 0))] : []), prop(0)]);
   const hierarchyOffset = objectOffset + object.length + idSize * 2;
   const levelOffset = hierarchyOffset + 12 + idSize;
   const tileOffset = levelOffset + 8 + idSize * 2;
   const maskOffset = tileOffset + pixels.length;
-  const channel = Buffer.concat([u32(1), u32(1), name("Mask"), prop(0)]);
+  const channel = Buffer.concat([u32(maskWidth), u32(maskHeight), name("Mask"), prop(0)]);
   const channelHierarchyOffset = maskOffset + channel.length + idSize;
   const channelLevelOffset = channelHierarchyOffset + 12 + idSize;
   const channelTileOffset = channelLevelOffset + 8 + idSize * 2;
   return Buffer.concat([header, id(objectOffset), id(0), id(0), object,
     id(group ? 0 : hierarchyOffset), id(mask ? maskOffset : 0),
-    u32(1), u32(1), u32(bpp), id(levelOffset), u32(1), u32(1), id(tileOffset), id(0), Buffer.from(pixels),
-    ...(mask ? [channel, id(channelHierarchyOffset), u32(1), u32(1), u32(maskBpp), id(channelLevelOffset),
-      u32(1), u32(1), id(channelTileOffset), id(0), Buffer.from([89])] : [])]);
+    u32(width), u32(height), u32(bpp), id(levelOffset), u32(width), u32(height), id(tileOffset), id(0), Buffer.from(pixels),
+    ...(mask ? [channel, id(channelHierarchyOffset), u32(maskWidth), u32(maskHeight), u32(maskBpp), id(channelLevelOffset),
+      u32(maskWidth), u32(maskHeight), id(channelTileOffset), id(0), Buffer.from(maskPixels)] : [])]);
 }
 export function parse(bytes, XCFParser, Layer, LayerSectionType) {
   const doc = { layers: [], newLayer() { return new Layer(); }, createGroupEndLayer() {
