@@ -152,6 +152,7 @@ function parse(arrayBuffer, doc) {
   offset = readIdList(bytes, offset, channelIds, idSize);
 
   doc.openGroupDepth = 0;
+  doc.openGroupPaths = [];
   for (var layerIdx = 0; layerIdx < layerIds.length; layerIdx++) {
     readLayer(bytes, layerIds[layerIdx], doc, compressionProps, idSize, bitDepth, budget, colorMode);
   }
@@ -161,6 +162,7 @@ function parse(arrayBuffer, doc) {
   }
   doc.layers.reverse();
   delete doc.openGroupDepth;
+  delete doc.openGroupPaths;
   doc.buffer = allocBuffer(doc.width * doc.height * 4);
   if (doc.layers.length == 0) console.log("No layers!!!");
 
@@ -190,8 +192,18 @@ function readLayer(bytes, offset, doc, compressionProps, idSize, bitDepth, budge
 
   var props = {};
   offset = readPropertyList(bytes, offset, props);
-  var savedGroupDepth = 0;
-  if (props[XcfPropType.PROP_ITEM_PATH]) savedGroupDepth = props[XcfPropType.PROP_ITEM_PATH].length / 4 - 1;
+  var itemPath = [];
+  if (props[XcfPropType.PROP_ITEM_PATH]) {
+    var pathBytes = props[XcfPropType.PROP_ITEM_PATH];
+    for (var pathOffset = 0; pathOffset < pathBytes.length; pathOffset += 4) {
+      itemPath.push(BinaryUtils.readUint32BE(pathBytes, pathOffset));
+    }
+  }
+  var savedGroupDepth = Math.max(0, itemPath.length - 1);
+  if (savedGroupDepth > 128 || savedGroupDepth > doc.openGroupDepth ||
+      savedGroupDepth > 0 && !doc.openGroupPaths[savedGroupDepth - 1].every((index, depth) => itemPath[depth] == index)) {
+    throw new RangeError("xcf: invalid group parent path");
+  }
   applyLayerProps(layer, props);
   var maskRect = new Rect(layer.rect.x, layer.rect.y, layerWidth, layerHeight);
   // Groups have an empty model rect, but their stored mask follows the XCF
@@ -214,7 +226,11 @@ function readLayer(bytes, offset, doc, compressionProps, idSize, bitDepth, budge
     doc.openGroupDepth--;
   }
   doc.openGroupDepth = savedGroupDepth;
-  if (layer.add.lsct == LayerSectionType.OpenGroup || layer.add.lsct == LayerSectionType.ClosedGroup) doc.openGroupDepth++;
+  doc.openGroupPaths.length = savedGroupDepth;
+  if (layer.isGroup()) {
+    doc.openGroupDepth++;
+    doc.openGroupPaths.push(itemPath.length ? itemPath : [doc.layers.length]);
+  }
 
   if (layer.hasPixelData()) {
     validateDimensions(layerWidth, layerHeight);

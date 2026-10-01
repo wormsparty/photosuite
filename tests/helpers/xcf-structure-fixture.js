@@ -36,3 +36,24 @@ export function parse(bytes, XCFParser, Layer, LayerSectionType) {
   XCFParser.parse(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.length), doc);
   return doc;
 }
+
+// One-pixel stack for nested topology checks; paths are stored verbatim.
+export function stackFixture({ idSize = 4, layers = [] } = {}) {
+  const id = idSize === 4 ? u32 : u64;
+  const header = Buffer.concat([Buffer.from(idSize === 4 ? "gimp xcf v003\0" : "gimp xcf v011\0"),
+    u32(1), u32(1), u32(0), ...(idSize === 8 ? [u32(100)] : []), prop(17, Buffer.from([0])), prop(0)]);
+  let cursor = header.length + idSize * (layers.length + 2);
+  const pointers = [], objects = [];
+  for (const { group = false, flags, path = [0], title = "Tiny" } of layers) {
+    const object = Buffer.concat([u32(1), u32(1), u32(1), name(title),
+      prop(30, Buffer.concat(path.map(u32))), ...(group ? [prop(29)] : []),
+      ...(flags != null ? [prop(31, u32(flags))] : []), prop(0)]);
+    const hierarchy = cursor + object.length + idSize * 2;
+    const level = hierarchy + 12 + idSize;
+    const tile = level + 8 + idSize * 2;
+    const payload = Buffer.concat([object, id(group ? 0 : hierarchy), id(0),
+      u32(1), u32(1), u32(4), id(level), u32(1), u32(1), id(tile), id(0), Buffer.from([23, 61, 107, 255])]);
+    pointers.push(id(cursor)); objects.push(payload); cursor += payload.length;
+  }
+  return Buffer.concat([header, ...pointers, id(0), id(0), ...objects]);
+}
