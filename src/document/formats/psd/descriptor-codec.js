@@ -76,6 +76,17 @@ function requireFourAsciiBytes(value) {
   }
 }
 
+function requireByteString(value) {
+  if (typeof value !== "string" || !/^[\x00-\xff]*$/.test(value)) {
+    throw new Error("psd-descriptor: byte string required");
+  }
+}
+function requireOSKey(value) {
+  requireByteString(value);
+  if (value.length > 1000 || value.trim() !== value) {
+    throw new Error("psd-descriptor: OSKey length or padding out of range");
+  }
+}
 /**
  * Four-char keys that are nonetheless length-prefixed on the wire (their
  * meaning would otherwise be ambiguous with padded short keys).
@@ -534,6 +545,7 @@ function keySize(data, pos) {
 
 /** Write an OSType key, length-prefixing long keys and space-padding short ones. */
 function writeOSKey(buf, pos, key) {
+  requireOSKey(key);
   var isLong = 4 < key.length || LONG_KEY_WORDS.indexOf(key) != -1;
   BinaryUtils.writeInt32(buf, pos, isLong ? key.length : 0);
   BinaryUtils.writeAscii(buf, pos + 4, key);
