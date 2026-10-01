@@ -125,11 +125,12 @@ function writeDescriptor(buf, desc, pos, depth = 0) {
   pos += 4 + 2 * name.length;
   writeOSKey(buf, pos, desc.classID);
   pos += keySize(buf.data, pos);
-  BinaryUtils.writeInt32(buf, pos, Object.keys(desc).length - 1 - (desc.__name == null ? 0 : 1));
+  // Count and emit the same own fields. Metadata may be nullable, inherited
+  // or nonenumerable; none of it is a descriptor value field.
+  var fieldKeys = Object.keys(desc).filter(key => key !== "classID" && key !== "__name");
+  BinaryUtils.writeInt32(buf, pos, fieldKeys.length);
   pos += 4;
-  for (var key in desc) {
-    if (key == "classID") continue;
-    if (key == "__name") continue;
+  for (var key of fieldKeys) {
     writeOSKey(buf, pos, key);
     pos += keySize(buf.data, pos);
     pos += writeValue(buf, pos, desc[key], depth);
