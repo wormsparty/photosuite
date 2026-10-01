@@ -17,6 +17,7 @@ let PaintBucketTool;
 let PaintTool;
 let Layer;
 let Document;
+let Mask;
 
 function patchDomForInputHandler() {
 }
@@ -34,6 +35,7 @@ before(async () => {
   ({ BrushTool, GradientTool, PaintBucketTool, PaintTool } = await import("../../../src/document/tools/paint-tools.js"));
   ({ Layer } = await import("../../../src/document/model/layer.js"));
   ({ Document } = await import("../../../src/document/model/document.js"));
+  ({ Mask } = await import("../../../src/document/model/layer-masks.js"));
   const { TrackerRegistry } = await import("../../../src/features/trackers/tracker-registry.js");
   const { registerTrackers } = await import("../../../src/features/trackers/register-trackers.js");
   registerTrackers(TrackerRegistry);
@@ -44,6 +46,52 @@ after(() => {
 });
 
 describe("document/tools/paint-tools.js", () => {
+  for (const opacity of [0, 64, 128, 255]) {
+    for (const selected of [false, true]) {
+      for (const target of ["extra channel", "layer mask", "smart-filter mask"]) {
+        it(`fills a ${target} at opacity ${opacity} with selection ${selected}`, () => {
+          const mask = new Mask();
+          mask.rect = new Rect(0, 0, 3, 1);
+          mask.channel = new Uint8Array([20, 20, 20, 0]);
+          const selectionMask = selected ? { rect: mask.rect.clone(), channel: new Uint8Array([0, 128, 255, 0]) } : null;
+          const layer = new Layer();
+          layer.pixelContent = target == "smart-filter mask" ? 3 : 1;
+          layer.d = mask;
+          layer.getLinkedPlacedItem = () => ({ d: mask });
+          const doc = { width: 3, height: 1, layers: [layer], selectedLayerIndices: [0], activeChannels: target == "extra channel" ? [0] : [], extraChannels: [mask] };
+          const tool = new PaintTool();
+          let result;
+          tool.pushPaintHistory = (_doc, _redo, _label, _layer, _kind, _rect, buffer) => { result = buffer; };
+          tool.fillRegionWithColor(doc, layer, selectionMask, 220, 220, 220, opacity, "norm", "edit.fill");
+          const weights = selected ? [0, 128, 255] : [255, 255, 255];
+          const expected = weights.map((weight) => Math.floor(20 + 200 * (Math.floor(opacity * weight / 255) / 255)));
+          assert.deepEqual(Array.from(result.slice(0, 3)), expected);
+        });
+      }
+    }
+  }
+
+  for (const opacity of [0, 64, 128, 255]) {
+    it(`fills a cached mask at opacity ${opacity} before applying the selection once`, () => {
+      const mask = new Mask();
+      mask.rect = new Rect(0, 0, 3, 1);
+      mask.channel = new Uint8Array([20, 20, 20, 0]);
+      const layer = new Layer();
+      layer.pixelContent = 1;
+      layer.d = mask;
+      layer.checkPixelCache = () => true;
+      layer.pixCache = { selectionPixels: new Uint8Array([20, 20, 20, 0]) };
+      const selectionMask = { rect: mask.rect.clone(), channel: new Uint8Array([0, 128, 255, 0]) };
+      let history;
+      const doc = { width: 3, height: 1, layers: [layer], selectedLayerIndices: [0], activeChannels: [], pushHistory: (entry) => { history = entry; } };
+      const tool = new PaintTool();
+      tool.redo = () => {};
+      tool.fillRegionWithColor(doc, layer, selectionMask, 220, 220, 220, opacity, "norm", "edit.fill");
+      assert.deepEqual(Array.from(history.data.pixCacheAfter.slice(0, 3)), new Array(3).fill(Math.floor(20 + 200 * opacity / 255)));
+      assert.deepEqual(history.data.pixCacheBefore, new Uint8Array([20, 20, 20, 0]));
+    });
+  }
+
   it("registerPaintTools wires paint and gradient tool constructors", () => {
     chainToolPrototypes();
     const brushTool = new BrushTool();

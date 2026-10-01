@@ -31,7 +31,7 @@ import { growOrShrinkSelection } from "./selection-actions.js";
 import { floodSelectMask, readSampleColors, sampleSelectionAtPoint } from "./flood-select.js";
 import { quickSelectSession, recomputeQuickSelectSelection } from "./quick-select-session.js";
 import { allocBuffer, copyBuffer, extractChannel, extractChannelByte, fillBuffer, rgbaToGrayChannel } from "../../engine/compositing/buffer-utils.js";
-import { blitChannelToBuffer, copyChannel, copyPixels, getWhiteBuffer, getZeroBuffer, multiplyAlphaByMask, multiplyBuffers, round, scaleBuffer, scaleRgbaAlphaByMask } from "../../engine/compositing/pixel-ops.js";
+import { blitChannelToBuffer, copyChannel, copyPixels, getWhiteBuffer, getZeroBuffer, multiplyAlphaByMask, multiplyBuffers, multiplyMaskByRegion, round, scaleBuffer, scaleRgbaAlphaByMask } from "../../engine/compositing/pixel-ops.js";
 import { drawCheckerboard, invert, luminanceFromRgb } from "../../engine/compositing/color-math.js";
 import { composite, compositeDissolvedDitheredClipped, compositeLayer } from "../../engine/compositing/compositing-ops.js";
 import { applyGradient, psdColorToRgb, toRGBDesc } from "../../engine/compositing/psd-color-utils.js";
@@ -394,7 +394,7 @@ PaintTool.prototype.applyFillToTarget = function(doc, layer, selectionMask, fill
     targetRect = selectionMask == null ? new Rect(0, 0, doc.width, doc.height) : selectionMask.rect,
     selectionChannel = selectionMask == null ? getWhiteBuffer(doc.width * doc.height) : selectionMask.channel,
     pixelCount = targetRect.area(),
-    destBuffer, grayMask = null;
+    destBuffer, grayMask = null, fillAlpha = null;
   if (pixelContentKind <= 0) {
     destBuffer = allocBuffer(pixelCount * 4);
     copyPixels(layer.buffer, layer.rect, destBuffer, targetRect)
@@ -403,16 +403,18 @@ PaintTool.prototype.applyFillToTarget = function(doc, layer, selectionMask, fill
     maskOrSmartFilter.extend(targetRect);
     copyChannel(maskOrSmartFilter.channel, maskOrSmartFilter.rect, destBuffer, targetRect)
   }
-  if (selectionMask != null) multiplyAlphaByMask(selectionChannel, fillRgba);
+  if (selectionMask != null && pixelContentKind <= 0) multiplyAlphaByMask(selectionChannel, fillRgba);
   if (pixelContentKind > 0) {
     grayMask = allocBuffer(pixelCount);
-    rgbaToGrayChannel(fillRgba, grayMask)
+    rgbaToGrayChannel(fillRgba, grayMask);
+    fillAlpha = allocBuffer(pixelCount);
+    extractChannelByte(fillRgba, fillAlpha, 3)
   }
   if (0 <= layerIndex && selectionMask && layer.checkPixelCache(doc, selectionMask)) {
     var pixCacheBefore = layer.pixCache.selectionPixels,
       pixCacheAfter = layer.pixCache.selectionPixels.slice(0);
     if (pixelContentKind <= 0) copyBuffer(fillRgba, pixCacheAfter);
-    else copyBuffer(grayMask, pixCacheAfter);
+    else compositeDissolvedDitheredClipped(grayMask, targetRect, pixCacheAfter, targetRect, fillAlpha, targetRect, 1);
     var tempHistoryEntry = new HistoryEntry("edit.fill", this);
     tempHistoryEntry.data = {
       actionKind: "drawtemp",
@@ -432,7 +434,10 @@ PaintTool.prototype.applyFillToTarget = function(doc, layer, selectionMask, fill
       }
       composite(blendMode, fillRgba, targetRect, destBuffer, targetRect, targetRect, 1);
       if (layer.isLockBitSet(0)) extractChannel(transparencyLockBuffer, destBuffer, 3)
-    } else compositeDissolvedDitheredClipped(grayMask, targetRect, destBuffer, targetRect, selectionChannel, targetRect, 1);
+    } else {
+      if (selectionMask != null) multiplyMaskByRegion(selectionChannel, targetRect, fillAlpha, targetRect);
+      compositeDissolvedDitheredClipped(grayMask, targetRect, destBuffer, targetRect, fillAlpha, targetRect, 1);
+    }
     this.pushPaintHistory(doc, true, historyLabelKey, layerIndex, pixelContentKind, targetRect, destBuffer)
   }
 };
