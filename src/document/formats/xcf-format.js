@@ -242,7 +242,6 @@ function applyLayerProps(layer, props) {
   if (props[XcfPropType.PROP_MODE]) {
     var modeCode = BinaryUtils.readUint32BE(props[XcfPropType.PROP_MODE], 0);
     layer.blendMode = XcfPropType.psdBlendModeCodes[modeCode];
-    if (layer.isGroup() && layer.blendMode == "norm") layer.blendMode = "pass";
   }
   if (props[XcfPropType.PROP_VISIBLE] && BinaryUtils.readUint32BE(props[XcfPropType.PROP_VISIBLE], 0) == 0) {
     layer.layerFlags += HIDDEN_LAYER_FLAG;
