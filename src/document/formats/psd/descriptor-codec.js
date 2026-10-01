@@ -330,6 +330,36 @@ function writeValue(buf, pos, node, depth = 0) {
   var typeCode = node.t;
   var value = node.v;
   if (!WRITABLE_TYPES.has(typeCode)) throw new Error("psd-descriptor: unsupported OSType " + typeCode);
+  // Do not let JavaScript coercion change a typed model or its byte boundary.
+  if (typeCode === "bool" && typeof value !== "boolean") {
+    throw new Error("psd-descriptor: boolean value required");
+  }
+  if (typeCode === "doub" && typeof value !== "number") {
+    throw new Error("psd-descriptor: numeric value required");
+  }
+  if (typeCode === "UntF" && (value == null || typeof value.val !== "number")) {
+    throw new Error("psd-descriptor: numeric unit value required");
+  }
+  if (typeCode === "TEXT" && typeof value !== "string") {
+    throw new Error("psd-descriptor: text value required");
+  }
+  if (typeCode === "VlLs" || typeCode === "obj ") {
+    if (!Array.isArray(value)) throw new Error("psd-descriptor: list array required");
+    for (var itemIndex = 0; itemIndex < value.length; itemIndex++) {
+      if (!Object.hasOwn(value, itemIndex) || value[itemIndex] == null || typeof value[itemIndex] !== "object") {
+        throw new Error("psd-descriptor: list typed value required");
+      }
+    }
+  }
+  if (typeCode === "enum") {
+    if (value == null || typeof value !== "object" || Array.isArray(value)) {
+      throw new Error("psd-descriptor: enum pair required");
+    }
+    var enumKeys = Object.keys(value);
+    if (enumKeys.length !== 1 || typeof value[enumKeys[0]] !== "string") {
+      throw new Error("psd-descriptor: exactly one enum string pair required");
+    }
+  }
   // Validate fixed-width fields before writing: coercion or a short/long tag
   // would corrupt the value or shift the following node's byte boundary.
   if (typeCode === "long") requireIntegerRange(value, -0x80000000, 0x7fffffff);
