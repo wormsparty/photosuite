@@ -193,6 +193,13 @@ function readLayer(bytes, offset, doc, compressionProps, idSize, bitDepth, budge
   var savedGroupDepth = 0;
   if (props[XcfPropType.PROP_ITEM_PATH]) savedGroupDepth = props[XcfPropType.PROP_ITEM_PATH].length / 4 - 1;
   applyLayerProps(layer, props);
+  var maskRect = new Rect(layer.rect.x, layer.rect.y, layerWidth, layerHeight);
+  // Groups have an empty model rect, but their stored mask follows the XCF
+  // layer header and offsets, including negative document coordinates.
+  if (layer.isGroup() && props[XcfPropType.PROP_OFFSETS]) {
+    maskRect.x = BinaryUtils.readInt32BE(props[XcfPropType.PROP_OFFSETS], 0);
+    maskRect.y = BinaryUtils.readInt32BE(props[XcfPropType.PROP_OFFSETS], 4);
+  }
 
   if (props[XcfPropType.PROP_PARASITES]) {
     var parasites = props[XcfPropType.PROP_PARASITES];
@@ -212,7 +219,9 @@ function readLayer(bytes, offset, doc, compressionProps, idSize, bitDepth, budge
   if (layer.hasPixelData()) {
     validateDimensions(layerWidth, layerHeight);
     readLayerPixelData(bytes, offset, layer, props, compressionProps, idSize, bitDepth, budget, baseType);
-
+  } else if (layer.isGroup()) {
+    readOffset(bytes, offset, idSize);
+    readLayerMask(bytes, readOffset(bytes, offset + idSize, idSize), layer, props, compressionProps, idSize, bitDepth, budget, maskRect);
   }
   doc.layers.push(layer);
 }
@@ -275,18 +284,20 @@ function readLayerPixelData(bytes, offset, layer, props, compressionProps, idSiz
     }
   }
   planarToInterleaved(planarPixels, layer.buffer);
-  if (maskChannelId == 0) {
-    budget.used -= temporaryBytes;
-    return;
-  }
+  readLayerMask(bytes, maskChannelId, layer, props, compressionProps, idSize, bitDepth, budget, layer.rect);
+  budget.used -= temporaryBytes;
+}
+
+/** Masks belong to both raster layers and groups, independently of pixels. */
+function readLayerMask(bytes, maskChannelId, layer, props, compressionProps, idSize, bitDepth, budget, rect) {
+  if (maskChannelId == 0) return;
   layer.d = new Mask;
   layer.d.color = 0;
-  layer.d.rect = layer.rect.clone();
-  layer.d.channel = readChannel(bytes, maskChannelId, compressionProps, idSize, bitDepth, budget, layer.rect.width, layer.rect.height).channelPlane;
+  layer.d.rect = rect.clone();
+  layer.d.channel = readChannel(bytes, maskChannelId, compressionProps, idSize, bitDepth, budget, rect.width, rect.height).channelPlane;
   if (props[XcfPropType.PROP_APPLY_MASK]) {
     layer.d.isEnabled = BinaryUtils.readUint32BE(props[XcfPropType.PROP_APPLY_MASK], 0) == 1;
   }
-  budget.used -= temporaryBytes;
 }
 
 /** Build a text layer from a GIMP `gimp-text-layer` parasite. */
