@@ -100,6 +100,16 @@ function requireNumber(value) {
 function requireName(value) {
   if (value != null && typeof value !== "string") throw new Error("psd-descriptor: name string required");
 }
+function requireRecord(value) {
+  if (value == null || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("psd-descriptor: structured object required");
+  }
+}
+function requireDescriptorMetadata(value) {
+  requireRecord(value);
+  requireName(value.__name);
+  requireOSKey(value.classID);
+}
 
 /**
  * Four-char keys that are nonetheless length-prefixed on the wire (their
@@ -142,6 +152,7 @@ function parseDescriptor(data, desc, pos, debug, depth) {
 /** Write a descriptor. Returns bytes written. */
 function writeDescriptor(buf, desc, pos, depth = 0) {
   requireDepth(depth);
+  requireDescriptorMetadata(desc);
   var startPos = pos;
   var name = desc.__name;
   if (name == null) name = "";
@@ -356,6 +367,13 @@ function writeValue(buf, pos, node, depth = 0) {
   var typeCode = node.t;
   var value = node.v;
   if (!WRITABLE_TYPES.has(typeCode)) throw new Error("psd-descriptor: unsupported OSType " + typeCode);
+  if (typeCode === "Objc" || ["Clss", "type", "rele", "prop", "Enmr", "indx", "name"].includes(typeCode)) {
+    requireDescriptorMetadata(value);
+    for (const field of OSTYPE_FIELDS[typeCode] ?? []) requireOSKey(value[field]);
+    if (typeCode === "name" && typeof value.val !== "string") {
+      throw new Error("psd-descriptor: reference name string required");
+    }
+  }
   // Do not let JavaScript coercion change a typed model or its byte boundary.
   if (typeCode === "bool" && typeof value !== "boolean") {
     throw new Error("psd-descriptor: boolean value required");
