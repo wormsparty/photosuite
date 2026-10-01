@@ -18,7 +18,7 @@ const u64 = value => { const out = Buffer.alloc(8); out.writeBigUInt64BE(BigInt(
 // their historical implementation could allocate attacker-selected buffers.
 function fixture({ idSize = 4, channel = false, width = 1, height = 1 } = {}) {
   const id = idSize === 4 ? u32 : u64;
-  const header = Buffer.concat([Buffer.from(idSize === 4 ? "gimp xcf v003\0" : "gimp xcf v007\0"),
+  const header = Buffer.concat([Buffer.from(idSize === 4 ? "gimp xcf v003\0" : "gimp xcf v012\0"),
     u32(width), u32(height), u32(0), ...(idSize === 8 ? [u32(100)] : []),
     u32(17), u32(1), Buffer.from([1]), Buffer.alloc(8)]);
   const objectOffset = header.length + 3 * idSize;

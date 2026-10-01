@@ -132,12 +132,14 @@ function parse(arrayBuffer, doc) {
   var colorMode = BinaryUtils.readUint32BE(bytes, offset);
   offset += 4;
   if (colorMode > 2) throw new RangeError("xcf: unsupported image color mode");
-  if (["file", "v001", "v002", "v003"].indexOf(versionTag) == -1) {
+  if (version >= 4) {
     requireBytes(bytes, offset, 4);
     bitDepth = BinaryUtils.readUint32BE(bytes, offset);
     offset += 4;
-    if (parseInt(versionTag.slice(1)) < 7) alert("Unknown XCF version: " + versionTag);
-    idSize = 8;
+    // v004-v006 were development formats with different precision enums.
+    if (version < 7) throw new RangeError("xcf: unsupported development version");
+    // Precision was added in v004; 64-bit offsets only arrived in v011.
+    if (version >= 11) idSize = 8;
   }
   // Multi-byte grayscale needs color/coverage-specific transfer conversion;
   // reject it until the decoder supports those semantics explicitly.

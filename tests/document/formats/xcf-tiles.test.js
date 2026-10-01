@@ -26,7 +26,7 @@ const property = (type, bytes) => Buffer.concat([u32(type), u32(bytes.length), b
 function fixture({ width = 1, idSize = 4, compression = 2, precision = 100, samples = 4, layerProperties = Buffer.alloc(0), tile = Buffer.from([0, 23, 0, 61, 0, 107, 0, 255]) } = {}) {
   const id = idSize == 4 ? u32 : u64;
   const name = Buffer.from("Tiny\0");
-  const header = Buffer.concat([Buffer.from(idSize == 4 ? "gimp xcf v003\0" : "gimp xcf v007\0"), u32(width), u32(1), u32(0),
+  const header = Buffer.concat([Buffer.from(idSize == 4 ? "gimp xcf v003\0" : "gimp xcf v012\0"), u32(width), u32(1), u32(0),
     ...(idSize == 8 ? [u32(precision)] : []), property(17, Buffer.from([compression])), end]);
   const layerOffset = header.length + 3 * idSize;
   const layerNameOffset = layerOffset + 12;

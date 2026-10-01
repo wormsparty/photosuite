@@ -6,10 +6,12 @@ const name = s => { const b = Buffer.from(s + "\0"); return Buffer.concat([u32(b
 // Tiny synthetic fixtures exercise parser semantics, not GIMP interoperability.
 export function fixture({ idSize = 4, colorMode = 0, baseType = 1, pixels = [23, 61, 107, 255],
   palette = [23, 61, 107, 199, 151, 73], group = false, mode = 0, mask = false,
-  applyMask = true, offsets = [3, 5], bpp = pixels.length, path = [0], flags = 1, maskBpp = 1, precision = 100 } = {}) {
+  applyMask = true, offsets = [3, 5], bpp = pixels.length, path = [0], flags = 1, maskBpp = 1, precision = 100,
+  version = idSize === 4 ? 3 : 12 } = {}) {
   const id = idSize === 4 ? u32 : u64;
-  const header = Buffer.concat([Buffer.from(idSize === 4 ? "gimp xcf v003\0" : "gimp xcf v007\0"),
-    u32(1), u32(1), u32(colorMode), ...(idSize === 8 ? [u32(precision)] : []),
+  const versionTag = version === 0 ? "file" : "v" + String(version).padStart(3, "0");
+  const header = Buffer.concat([Buffer.from("gimp xcf " + versionTag + "\0"),
+    u32(1), u32(1), u32(colorMode), ...(version >= 4 ? [u32(precision)] : []),
     prop(17, Buffer.from([0])), ...(colorMode === 2 && palette != null ? [prop(1, Buffer.concat([u32(palette.length / 3), Buffer.from(palette)]))] : []), prop(0)]);
   const objectOffset = header.length + idSize * 3;
   const object = Buffer.concat([u32(1), u32(1), u32(baseType), name("Tiny"),
