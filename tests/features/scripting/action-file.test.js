@@ -297,10 +297,14 @@ describe("features/scripting/action-file.js", () => {
 
   it("rejects excessive embedded nesting and permits a fresh bounded parse (after-only)", () => {
     const set = sampleActionSet();
-    let node = { t: "long", v: 1 };
-    for (let depth = 0; depth < 80; depth++) node = { t: "VlLs", v: [node] };
-    set.children[0].children[0].actionDescriptor = { classID: "null", data: node };
-    assert.throws(() => ActionParser.parse(ActionParser.serialize(set)), /depth|nest|limit/i);
+    set.children[0].children[0].actionDescriptor = { classID: "null", data: { t: "long", v: 1 } };
+    const shallow = new Uint8Array(ActionParser.serialize(set));
+    // Encode the excessive wire nesting independently: export now also rejects
+    // models past the shared depth limit, so it cannot construct this fixture.
+    assert.deepEqual([...shallow.slice(-8)], [108, 111, 110, 103, 0, 0, 0, 1]);
+    const wrappers = Array.from({ length: 80 }, () => [86, 108, 76, 115, 0, 0, 0, 1]).flat();
+    const bytes = Uint8Array.from([...shallow.slice(0, -8), ...wrappers, ...shallow.slice(-8)]);
+    assert.throws(() => ActionParser.parse(bytes.buffer), /depth|nest|limit/i);
     assert.equal(ActionParser.parse(Uint8Array.from(SERIALIZED_SAMPLE).buffer)[0].name, "My Set");
   });
 

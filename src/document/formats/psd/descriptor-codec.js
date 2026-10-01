@@ -115,7 +115,8 @@ function parseDescriptor(data, desc, pos, debug, depth) {
 }
 
 /** Write a descriptor. Returns bytes written. */
-function writeDescriptor(buf, desc, pos) {
+function writeDescriptor(buf, desc, pos, depth = 0) {
+  requireDepth(depth);
   var startPos = pos;
   var name = desc.__name;
   if (name == null) name = "";
@@ -131,7 +132,7 @@ function writeDescriptor(buf, desc, pos) {
     if (key == "__name") continue;
     writeOSKey(buf, pos, key);
     pos += keySize(buf.data, pos);
-    pos += writeValue(buf, pos, desc[key]);
+    pos += writeValue(buf, pos, desc[key], depth);
   }
   return pos - startPos;
 }
@@ -322,7 +323,8 @@ function readObjectArray(data, pos, result) {
 }
 
 /** Write a single typed value node. Returns bytes written. */
-function writeValue(buf, pos, node) {
+function writeValue(buf, pos, node, depth = 0) {
+  requireDepth(depth);
   var startPos = pos;
   var typeCode = node.t;
   var value = node.v;
@@ -344,7 +346,7 @@ function writeValue(buf, pos, node) {
     case "VlLs":
       BinaryUtils.writeInt32(buf, pos, value.length);
       pos += 4;
-      for (var i = 0; i < value.length; i++) pos += writeValue(buf, pos, value[i]);
+      for (var i = 0; i < value.length; i++) pos += writeValue(buf, pos, value[i], depth + 1);
       break;
     case "UntF":
       BinaryUtils.writeAscii(buf, pos, value.type);
@@ -370,7 +372,7 @@ function writeValue(buf, pos, node) {
       pos += 8;
       break;
     case "Objc":
-      pos += writeDescriptor(buf, value, pos);
+      pos += writeDescriptor(buf, value, pos, depth + 1);
       break;
     case "TEXT":
       BinaryUtils.writeUnicodeString(buf, pos, value + "\0");
