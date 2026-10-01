@@ -28,7 +28,7 @@ import { AppEvent } from "../../core/event-bus.js";
 import { packDoublesList } from "../formats/psd/descriptor-codec.js";
 import { resizeDocumentCanvas } from "./layer-translate.js";
 import { allocBuffer, copyBuffer, equals, fillBuffer } from "../../engine/compositing/buffer-utils.js";
-import { copyAlphaToChannel, copyPixels, getZeroBuffer, isBufferUniform, multiplyBuffers } from "../../engine/compositing/pixel-ops.js";
+import { copyAlphaToChannel, copyPixels, getZeroBuffer, isBufferUniform, multiplyMaskByRegion } from "../../engine/compositing/pixel-ops.js";
 import { rectToPathOutline } from "../../engine/compositing/anti-alias.js";
 import { countSubpaths } from "../../engine/compositing/path-records.js";
 import { createEmptyKeyOrigin } from "../../engine/compositing/key-origins.js";
@@ -686,7 +686,7 @@ export class Document {
     if (this.selectedLayerIndices.length == 1 && this.selectionMask) {
       const alphaScratch = allocBuffer(this.selectionMask.channel.length);
       copyAlphaToChannel(selectedLayer.buffer, selectedLayer.rect, alphaScratch, this.selectionMask.rect);
-      multiplyBuffers(this.selectionMask.channel, alphaScratch);
+      multiplyMaskByRegion(this.selectionMask.channel, this.selectionMask.rect, alphaScratch, this.selectionMask.rect);
       if (isBufferUniform(alphaScratch, 0)) {
         alert("Selected area is empty.");
         return false;

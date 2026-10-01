@@ -24,6 +24,65 @@ after(() => {
 });
 
 describe("document/model/document.js", () => {
+  for (const length of [1, 2, 3, 4, 5]) {
+    it(`checkSelectionNonEmpty accepts an exact ${length}-pixel channel`, () => {
+      const rect = new Rect(0, 0, length, 1);
+      const channel = new Uint8Array(length).fill(255);
+      const buffer = new Uint8Array(length * 4).fill(255);
+      const doc = {
+        layers: [{ pixelContent: 0, rect, buffer }],
+        selectedLayerIndices: [0],
+        selectionMask: { rect, channel },
+      };
+      assert.equal(Document.prototype.checkSelectionNonEmpty.call(doc), true);
+      assert.deepEqual(channel, new Uint8Array(length).fill(255));
+    });
+
+    it(`checkSelectionNonEmpty handles an exact ${length}-byte selection without changing it`, () => {
+      const rect = new Rect(3, 2, length, 1);
+      const backing = new Uint8Array(length + 3).fill(73);
+      const channel = backing.subarray(1, length + 1);
+      channel.fill(128);
+      const buffer = new Uint8Array(length * 4);
+      for (let index = 0; index < length; index++) buffer[index * 4 + 3] = 128;
+      const doc = {
+        layers: [{ pixelContent: 0, rect, buffer }],
+        selectedLayerIndices: [0],
+        selectionMask: { rect, channel },
+      };
+      const before = backing.slice();
+      assert.equal(Document.prototype.checkSelectionNonEmpty.call(doc), true);
+      assert.deepEqual(backing, before);
+    });
+  }
+
+  for (const [selectionByte, alpha, expected] of [
+    [0, 255, false], [255, 0, false], [1, 1, false],
+    [128, 1, false], [1, 128, false], [128, 128, true], [255, 255, true],
+  ]) {
+    it(`checkSelectionNonEmpty tests byte alpha ${alpha} through mask ${selectionByte}`, () => {
+      const channel = new Uint8Array([0, selectionByte, 0]);
+      const selectionRect = new Rect(-1, 2, 3, 1);
+      const doc = {
+        layers: [{ pixelContent: 0, rect: new Rect(0, 2, 1, 1), buffer: new Uint8Array([40, 60, 80, alpha]) }],
+        selectedLayerIndices: [0],
+        selectionMask: { rect: selectionRect, channel },
+      };
+      const before = channel.slice();
+      const alertBefore = globalThis.alert;
+      const alerts = [];
+      globalThis.alert = (message) => alerts.push(message);
+      try {
+        assert.equal(Document.prototype.checkSelectionNonEmpty.call(doc), expected);
+        assert.equal(alerts.length, expected ? 0 : 1);
+        assert.deepEqual(channel, before);
+        assert.deepEqual(doc.layers[0].buffer, new Uint8Array([40, 60, 80, alpha]));
+      } finally {
+        globalThis.alert = alertBefore;
+      }
+    });
+  }
+
   it("HistoryEntry stores routing metadata", () => {
     const channel = { id: "brush" };
     const entry = new HistoryEntry("edit.paint", channel, true);
