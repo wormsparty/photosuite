@@ -141,6 +141,12 @@ function parse(arrayBuffer, doc) {
     // Precision was added in v004; 64-bit offsets only arrived in v011.
     if (version >= 11) idSize = 8;
   }
+  if (![100, 150, 250, 600].includes(bitDepth)) {
+    throw new RangeError("xcf: unsupported image precision");
+  }
+  if (version < 12 && bitDepth != 100 && bitDepth != 150) {
+    throw new RangeError("xcf: unsupported development precision");
+  }
   // Multi-byte grayscale needs color/coverage-specific transfer conversion;
   // reject it until the decoder supports those semantics explicitly.
   if (colorMode == 1 && bitDepth != 100 && bitDepth != 150) {
@@ -593,7 +599,7 @@ function decodeTiledChannelData(bytes, offset, planarBuffer, compressionProps, b
       } else if (bitDepth == 600) {
         unpackHdrFloatTo8(channelSlices, sampleCount, pixelCount, colorSamples);
       } else {
-        console.log("unknown data format", bitDepth);
+        throw new RangeError("xcf: unsupported image precision");
       }
       copyChannelsWithClip(tilePlanar, tileBounds, planarBuffer, tileRect);
     }
