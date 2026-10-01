@@ -108,8 +108,18 @@ function parse(arrayBuffer, doc) {
   var offset = 0;
   var idSize = 4;
   var bitDepth = 100;
+  if (BinaryUtils.readString(bytes, 0, 9) != "gimp xcf " || bytes[13] != 0) {
+    throw new RangeError("xcf: invalid file signature");
+  }
   offset += 9;
   var versionTag = BinaryUtils.readString(bytes, offset, 4);
+  if (versionTag != "file" && !/^v[0-9]{3}$/.test(versionTag)) {
+    throw new RangeError("xcf: invalid version tag");
+  }
+  var version = versionTag == "file" ? 0 : Number(versionTag.slice(1));
+  // The documented GIMP format currently ends at v026. Future formats and
+  // CinePaint's v100+ dialect need review before decoding their payloads.
+  if (version > 26) throw new RangeError("xcf: unsupported file version");
   offset += 4;
   offset++;
   doc.width = BinaryUtils.readUint32BE(bytes, offset);
