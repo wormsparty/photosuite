@@ -87,6 +87,20 @@ function requireOSKey(value) {
     throw new Error("psd-descriptor: OSKey length or padding out of range");
   }
 }
+function requireDenseArray(value, validate) {
+  if (!Array.isArray(value)) throw new Error("psd-descriptor: dense array required");
+  for (let i = 0; i < value.length; i++) {
+    if (!Object.hasOwn(value, i)) throw new Error("psd-descriptor: dense array required");
+    validate(value[i]);
+  }
+}
+function requireNumber(value) {
+  if (typeof value !== "number") throw new Error("psd-descriptor: numeric sample required");
+}
+function requireName(value) {
+  if (value != null && typeof value !== "string") throw new Error("psd-descriptor: name string required");
+}
+
 /**
  * Four-char keys that are nonetheless length-prefixed on the wire (their
  * meaning would otherwise be ambiguous with padded short keys).
@@ -338,6 +352,7 @@ function readObjectArray(data, pos, result) {
 function writeValue(buf, pos, node, depth = 0) {
   requireDepth(depth);
   var startPos = pos;
+  if (node == null || typeof node !== "object") throw new Error("psd-descriptor: typed value required");
   var typeCode = node.t;
   var value = node.v;
   if (!WRITABLE_TYPES.has(typeCode)) throw new Error("psd-descriptor: unsupported OSType " + typeCode);
@@ -377,9 +392,26 @@ function writeValue(buf, pos, node, depth = 0) {
   if (typeCode === "rele") requireIntegerRange(value.val, -0x80000000, 0x7fffffff);
   if (typeCode === "indx") requireIntegerRange(value.val, 0, 0xffffffff);
   if (typeCode === "UntF") requireFourAsciiBytes(value.type);
+  if ((typeCode === "Pth " || typeCode === "ObAr") && (value == null || typeof value !== "object")) {
+    throw new Error("psd-descriptor: structured value required");
+  }
   if (typeCode === "Pth ") requireFourAsciiBytes(value.sig);
+  if (typeCode === "tdta") {
+    if (!(value instanceof Uint8Array)) requireDenseArray(value, byte => requireIntegerRange(byte, 0, 255));
+  }
+  if (typeCode === "alis") requireByteString(value);
+  if (typeCode === "Pth " && typeof value.pth !== "string") throw new Error("psd-descriptor: path string required");
   if (typeCode === "ObAr") {
-    for (var channel of value.arr) requireFourAsciiBytes(channel.uID);
+    requireOSKey(value.classID);
+    requireName(value.__name);
+    requireDenseArray(value.arr, channel => {
+      if (channel == null || typeof channel !== "object") throw new Error("psd-descriptor: channel object required");
+      requireOSKey(channel.id);
+      requireObjectArrayChannelType(channel.type);
+      requireFourAsciiBytes(channel.uID);
+      requireDenseArray(channel.arr, requireNumber);
+    });
+    if (value.objectCount !== undefined) requireIntegerRange(value.objectCount, 0, 0xffffffff);
   }
   BinaryUtils.writeAscii(buf, pos, typeCode);
   pos += 4;
