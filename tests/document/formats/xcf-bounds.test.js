@@ -146,10 +146,10 @@ describe("XCF bounded RLE tiles (malformed controls are after-only)", () => {
     const current = fixture();
     for (const bpp of [0, 5]) {
       const malformed = Buffer.from(current.bytes); u32(bpp).copy(malformed, current.hierarchyOffset + 8);
-      rejects(malformed, /invalid RLE channel layout/);
+      rejects(malformed, /invalid pixel channel layout/);
     }
     const deep = fixture({ idSize: 8 });
     const malformed = Buffer.from(deep.bytes); u32(250).copy(malformed, 26); u32(3).copy(malformed, deep.hierarchyOffset + 8);
-    rejects(malformed, /invalid RLE channel layout/);
+    rejects(malformed, /invalid pixel channel layout/);
   });
 });

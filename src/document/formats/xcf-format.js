@@ -16,6 +16,31 @@ import { linearToSrgb } from "../../engine/compositing/color-math.js";
 
 /** XCF tiles are 64x64 pixels. */
 const TILE_SIZE = 64;
+// Match the existing raster import pixel ceiling; additionally bound narrow images.
+const MAX_IMAGE_DIMENSION = 16384;
+const MAX_IMAGE_PIXELS = 8192 * 8192;
+// Include retained pixels and temporary planar/interleaved coexistence. Leave room
+// for the bounded tile scratch buffers, independently of compressed file size.
+const MAX_DECODED_BYTES = 512 * 1024 * 1024;
+const TILE_SCRATCH_BYTES = TILE_SIZE * TILE_SIZE * 8 * 4;
+
+function validateDimensions(width, height) {
+  if (!Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1 ||
+      width > MAX_IMAGE_DIMENSION || height > MAX_IMAGE_DIMENSION || width * height > MAX_IMAGE_PIXELS) {
+    throw new RangeError("xcf: invalid or excessive image dimensions");
+  }
+}
+
+function reserveDecodedBytes(budget, byteLength) {
+  if (byteLength > MAX_DECODED_BYTES - TILE_SCRATCH_BYTES - budget.used) {
+    throw new RangeError("xcf: decoded allocation budget exceeded");
+  }
+  budget.used += byteLength;
+}
+
+function planeBytes(pixelCount) {
+  return Math.ceil(pixelCount / 4) * 4;
+}
 /** Layer-flag bits marking a collapsed group; hidden layers add this bit. */
 const GROUP_LAYER_FLAGS = 24;
 const HIDDEN_LAYER_FLAG = 2;
@@ -91,6 +116,9 @@ function parse(arrayBuffer, doc) {
   offset += 4;
   doc.height = BinaryUtils.readUint32BE(bytes, offset);
   offset += 4;
+  validateDimensions(doc.width, doc.height);
+  var budget = { used: 0 };
+  reserveDecodedBytes(budget, doc.width * doc.height * 4);
   var colorMode = BinaryUtils.readUint32BE(bytes, offset);
   offset += 4;
   if (colorMode != 0) alert("Unsupported image format, not RGB!");
@@ -111,7 +139,7 @@ function parse(arrayBuffer, doc) {
 
   doc.openGroupDepth = 0;
   for (var layerIdx = 0; layerIdx < layerIds.length; layerIdx++) {
-    readLayer(bytes, layerIds[layerIdx], doc, compressionProps, idSize, bitDepth);
+    readLayer(bytes, layerIds[layerIdx], doc, compressionProps, idSize, bitDepth, budget);
   }
   while (doc.openGroupDepth > 0) {
     doc.layers.push(doc.createGroupEndLayer());
@@ -123,7 +151,7 @@ function parse(arrayBuffer, doc) {
   if (doc.layers.length == 0) console.log("No layers!!!");
 
   for (var channelIdx = 0; channelIdx < channelIds.length; channelIdx++) {
-    var channel = readChannel(bytes, channelIds[channelIdx], compressionProps, idSize, bitDepth);
+    var channel = readChannel(bytes, channelIds[channelIdx], compressionProps, idSize, bitDepth, budget, doc.width, doc.height);
     if (channel.properties[XcfPropType.PROP_SELECTION]) {
       doc.selectionMask = { channel: channel.channelPlane, rect: new Rect(0, 0, doc.width, doc.height) };
     }
@@ -131,7 +159,7 @@ function parse(arrayBuffer, doc) {
 }
 
 /** Read one layer (header, properties, text, pixel data) and push it. */
-function readLayer(bytes, offset, doc, compressionProps, idSize, bitDepth) {
+function readLayer(bytes, offset, doc, compressionProps, idSize, bitDepth, budget) {
   requireBytes(bytes, offset, 12);
   var layer = doc.newLayer();
   var layerWidth = BinaryUtils.readUint32BE(bytes, offset);
@@ -166,7 +194,10 @@ function readLayer(bytes, offset, doc, compressionProps, idSize, bitDepth) {
   doc.openGroupDepth = savedGroupDepth;
   if (layer.add.lsct == LayerSectionType.OpenGroup || layer.add.lsct == LayerSectionType.ClosedGroup) doc.openGroupDepth++;
 
-  if (layer.hasPixelData()) readLayerPixelData(bytes, offset, layer, props, compressionProps, idSize, bitDepth);
+  if (layer.hasPixelData()) {
+    validateDimensions(layerWidth, layerHeight);
+    readLayerPixelData(bytes, offset, layer, props, compressionProps, idSize, bitDepth, budget);
+  }
   doc.layers.push(layer);
 }
 
@@ -198,24 +229,30 @@ function applyLayerProps(layer, props) {
 }
 
 /** Read a layer's tiled pixel data and optional layer mask. */
-function readLayerPixelData(bytes, offset, layer, props, compressionProps, idSize, bitDepth) {
+function readLayerPixelData(bytes, offset, layer, props, compressionProps, idSize, bitDepth, budget) {
   var pixelDataOffset = readOffset(bytes, offset, idSize, true);
   offset += idSize;
   var maskChannelId = readOffset(bytes, offset, idSize);
   offset += idSize;
-  requireBytes(bytes, pixelDataOffset, 12 + idSize);
+  validatePixelLayout(bytes, pixelDataOffset, layer.rect.width, layer.rect.height, idSize, bitDepth);
+  var temporaryBytes = planeBytes(layer.rect.area()) * 4;
+  reserveDecodedBytes(budget, layer.rect.area() * 4 + temporaryBytes);
   layer.buffer = allocBuffer(layer.rect.area() * 4);
   var planarPixels = new PlanarRgbaBuffer(layer.rect.area());
   readHierarchicalPixelData(bytes, pixelDataOffset, planarPixels, compressionProps, idSize, bitDepth);
   planarToInterleaved(planarPixels, layer.buffer);
-  if (maskChannelId == 0) return;
+  if (maskChannelId == 0) {
+    budget.used -= temporaryBytes;
+    return;
+  }
   layer.d = new Mask;
   layer.d.color = 0;
   layer.d.rect = layer.rect.clone();
-  layer.d.channel = readChannel(bytes, maskChannelId, compressionProps, idSize, bitDepth).channelPlane;
+  layer.d.channel = readChannel(bytes, maskChannelId, compressionProps, idSize, bitDepth, budget, layer.rect.width, layer.rect.height).channelPlane;
   if (props[XcfPropType.PROP_APPLY_MASK]) {
     layer.d.isEnabled = BinaryUtils.readUint32BE(props[XcfPropType.PROP_APPLY_MASK], 0) == 1;
   }
+  budget.used -= temporaryBytes;
 }
 
 /** Build a text layer from a GIMP `gimp-text-layer` parasite. */
@@ -376,22 +413,47 @@ function parseSExprTokens(source, pos, outTokens) {
 }
 
 /** Read a channel (name, properties, pixel plane) at `offset`. */
-function readChannel(bytes, offset, compressionProps, idSize, bitDepth) {
+function readChannel(bytes, offset, compressionProps, idSize, bitDepth, budget, expectedWidth, expectedHeight) {
   requireBytes(bytes, offset, 8);
   var channelWidth = BinaryUtils.readUint32BE(bytes, offset);
   offset += 4;
   var channelHeight = BinaryUtils.readUint32BE(bytes, offset);
   offset += 4;
+  validateDimensions(channelWidth, channelHeight);
   var channelName = readXcfString(bytes, offset);
   offset += channelName.size;
   var properties = {};
   offset = readPropertyList(bytes, offset, properties);
+  if (expectedWidth != null && (channelWidth != expectedWidth || channelHeight != expectedHeight)) {
+    throw new RangeError("xcf: channel dimensions mismatch");
+  }
   var pixelDataOffset = readOffset(bytes, offset, idSize, true);
   offset += idSize;
-  requireBytes(bytes, pixelDataOffset, 12 + idSize);
+  validatePixelLayout(bytes, pixelDataOffset, channelWidth, channelHeight, idSize, bitDepth);
+  var channelPlaneBytes = planeBytes(channelWidth * channelHeight);
+  reserveDecodedBytes(budget, channelPlaneBytes * 4);
   var planarBuffer = new PlanarRgbaBuffer(channelWidth * channelHeight);
   readHierarchicalPixelData(bytes, pixelDataOffset, planarBuffer, compressionProps, idSize, bitDepth);
+  budget.used -= channelPlaneBytes * 3;
   return { channelPlane: planarBuffer.h, properties: properties };
+}
+
+/** Validate hierarchy and level metadata before allocating destination planes. */
+function validatePixelLayout(bytes, offset, width, height, idSize, bitDepth) {
+  requireBytes(bytes, offset, 12 + idSize);
+  if (BinaryUtils.readUint32BE(bytes, offset) != width || BinaryUtils.readUint32BE(bytes, offset + 4) != height) {
+    throw new RangeError("xcf: hierarchy dimensions mismatch");
+  }
+  var bytesPerPixel = BinaryUtils.readUint32BE(bytes, offset + 8);
+  var sampleBytes = channelCountForBitDepth(bitDepth);
+  if (bytesPerPixel % sampleBytes != 0 || bytesPerPixel < sampleBytes || bytesPerPixel > sampleBytes * 4) {
+    throw new RangeError("xcf: invalid pixel channel layout");
+  }
+  var levelOffset = readOffset(bytes, offset + 12, idSize, true);
+  requireBytes(bytes, levelOffset, 8);
+  if (BinaryUtils.readUint32BE(bytes, levelOffset) != width || BinaryUtils.readUint32BE(bytes, levelOffset + 4) != height) {
+    throw new RangeError("xcf: level dimensions mismatch");
+  }
 }
 
 /** Read a hierarchy header and decode its level-0 tiled channel data. */
