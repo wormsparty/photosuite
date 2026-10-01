@@ -649,7 +649,7 @@ function getHdrFloatByteLut() {
 /** Decode one compressed tile's samples into the channel-slice planes. */
 function readTilePixels(bytes, offset, byteLength, compressionType, sampleCount, channelSlices, tileEnd) {
   if (compressionType == 1) {
-    decodeRleTile(bytes, offset, byteLength, sampleCount, channelSlices);
+    decodeRleTile(bytes.subarray(0, tileEnd), offset, byteLength, sampleCount, channelSlices);
   } else if (compressionType == 2) {
     decodeInterleavedTile(bytes.subarray(0, tileEnd), offset, byteLength, sampleCount, channelSlices, true);
   } else if (compressionType == 0) {

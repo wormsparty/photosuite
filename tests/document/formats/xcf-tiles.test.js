@@ -22,11 +22,11 @@ const u64 = value => { const bytes = Buffer.alloc(8); bytes.writeBigUInt64BE(Big
 const end = Buffer.alloc(8);
 const property = (type, bytes) => Buffer.concat([u32(type), u32(bytes.length), bytes]);
 
-// Independent tiny fixtures use no application encoder. Dimensions stay at most 65×1.
-function fixture({ width = 1, idSize = 4, compression = 2, precision = 150, samples = 4, layerProperties = Buffer.alloc(0), tile = Buffer.from([0, 23, 0, 61, 0, 107, 0, 255]) } = {}) {
+// Independent tiny fixtures use no application encoder. Dimensions stay at most 65×65.
+function fixture({ width = 1, height = 1, idSize = 4, compression = 2, precision = 150, samples = 4, layerProperties = Buffer.alloc(0), tile = Buffer.from([0, 23, 0, 61, 0, 107, 0, 255]) } = {}) {
   const id = idSize == 4 ? u32 : u64;
   const name = Buffer.from("Tiny\0");
-  const header = Buffer.concat([Buffer.from(idSize == 4 ? "gimp xcf v003\0" : "gimp xcf v012\0"), u32(width), u32(1), u32(0),
+  const header = Buffer.concat([Buffer.from(idSize == 4 ? "gimp xcf v003\0" : "gimp xcf v012\0"), u32(width), u32(height), u32(0),
     ...(idSize == 8 ? [u32(precision)] : []), property(17, Buffer.from([compression])), end]);
   const layerOffset = header.length + 3 * idSize;
   const layerNameOffset = layerOffset + 12;
@@ -36,9 +36,9 @@ function fixture({ width = 1, idSize = 4, compression = 2, precision = 150, samp
   const levelOffset = hierarchyOffset + 12 + idSize;
   const tilePointerOffset = levelOffset + 8;
   const tileOffset = tilePointerOffset + 2 * idSize;
-  const bytes = Buffer.concat([header, id(layerOffset), id(0), id(0), u32(width), u32(1), u32(samples == 3 ? 0 : 1), u32(name.length), name,
-    layerProperties, end, id(hierarchyOffset), id(0), u32(width), u32(1), u32(samples * (precision == 250 ? 2 : 1)), id(levelOffset),
-    u32(width), u32(1), id(tileOffset), id(0), tile]);
+  const bytes = Buffer.concat([header, id(layerOffset), id(0), id(0), u32(width), u32(height), u32(samples == 3 ? 0 : 1), u32(name.length), name,
+    layerProperties, end, id(hierarchyOffset), id(0), u32(width), u32(height), u32(samples * (precision == 250 ? 2 : 1)), id(levelOffset),
+    u32(width), u32(height), id(tileOffset), id(0), tile]);
   return { bytes, header, id, idSize, layerOffset, layerNameOffset, layerPropertyOffset, hierarchyPointerOffset, hierarchyOffset, levelOffset, tilePointerOffset, tileOffset };
 }
 function parse(bytes) {
@@ -100,4 +100,72 @@ describe("XCF independent raw and zlib tile controls", () => {
     const compressed = deflateSync(Buffer.from([23, 61, 107, 255])); compressed[compressed.length - 1] ^= 1;
     assert.throws(() => parse(fixture({ tile: compressed }).bytes));
   });
+});
+
+// RLE is planar within each tile. All fixtures remain bounded to four tiny tiles.
+function rle(raw, samples) {
+  const encoded = [];
+  for (let ch = 0; ch < samples; ch++) {
+    const plane = [];
+    for (let px = 0; px < raw.length / samples; px++) plane.push(raw[px * samples + ch]);
+    for (let start = 0; start < plane.length; start += 127) {
+      const chunk = plane.slice(start, start + 127);
+      encoded.push(Buffer.from([256 - chunk.length, ...chunk]));
+    }
+  }
+  return Buffer.concat(encoded);
+}
+function tiledFixture({ width = 65, height = 1, idSize = 4, compression = 1, samples = 4, tiles, pointerShift = 0 }) {
+  const current = fixture({ width, height, idSize, compression, samples });
+  const tileStart = current.tilePointerOffset + (tiles.length + 1) * idSize;
+  let offset = tileStart;
+  const pointers = tiles.map((tile, index) => {
+    const pointer = current.id(offset + (index === 1 ? pointerShift : 0));
+    offset += tile.length;
+    return pointer;
+  });
+  return Buffer.concat([current.bytes.subarray(0, current.tilePointerOffset), ...pointers, current.id(0), ...tiles]);
+}
+
+describe("XCF multi-tile compressed boundaries", () => {
+  for (const idSize of [4, 8]) {
+    for (const compression of [1, 2]) {
+      for (const samples of [3, 4]) {
+        it(`retains all 65×65 tile pixels for compression ${compression}, ${samples} samples and ${idSize * 8}-bit offsets`, () => {
+          const expected = Buffer.alloc(65 * 65 * 4);
+          const tiles = [];
+          for (let y = 0; y < 65; y += 64) {
+            for (let x = 0; x < 65; x += 64) {
+              const raw = [];
+              for (let dy = 0; dy < Math.min(64, 65 - y); dy++) {
+                for (let dx = 0; dx < Math.min(64, 65 - x); dx++) {
+                  const pixel = [(x + dx) * 3 % 256, (y + dy) * 5 % 256, (x + dx + y + dy) * 7 % 256, 37 + (x + dx + y + dy) % 219];
+                  raw.push(...pixel.slice(0, samples));
+                  expected.set([...pixel.slice(0, 3), samples === 4 ? pixel[3] : 255], ((y + dy) * 65 + x + dx) * 4);
+                }
+              }
+              tiles.push(compression === 1 ? rle(Buffer.from(raw), samples) : deflateSync(Buffer.from(raw)));
+            }
+          }
+          const doc = parse(tiledFixture({ width: 65, height: 65, compression, idSize, samples, tiles }));
+          assert.deepEqual(Buffer.from(doc.layers[0].buffer), expected);
+        });
+      }
+    }
+    // These malformed first tiles borrow bytes from a separately valid edge
+    // tile. Every decode is tiny; downstream decoding cannot mask the defect.
+    for (const [label, first, second, padding] of [
+      ["repeat value", [63, 23, 63, 61, 63, 107, 63], [0, 149, 0, 193, 0, 227, 0, 128], []],
+      ["long repeat length", [63, 23, 63, 61, 63, 107, 127], [0, 64, 0, 193, 0, 227, 0, 128], []],
+      ["long copy length", [63, 23, 63, 61, 63, 107, 128], [0, 64, 0, 193, 0, 227, 0, 128], Array(58).fill(99)],
+      ["copy payload", [63, 23, 63, 61, 63, 107, 192, ...Array(56).fill(255)], [0, 149, 0, 193, 0, 227, 0, 128], []],
+    ]) {
+      it(`rejects RLE ${label} crossing a following ${idSize * 8}-bit tile pointer`, () => {
+        rejects(tiledFixture({ idSize, tiles: [Buffer.from(first), Buffer.from([...second, ...padding])] }), /xcf:/);
+      });
+    }
+    it(`rejects zlib checksum crossing a following ${idSize * 8}-bit tile pointer`, () => {
+      rejects(tiledFixture({ idSize, compression: 2, tiles: [deflateSync(Buffer.alloc(64 * 4, 255)), deflateSync(Buffer.from([149, 193, 227, 128]))], pointerShift: -1 }), /xcf:/);
+    });
+  }
 });
