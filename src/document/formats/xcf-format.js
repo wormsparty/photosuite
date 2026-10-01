@@ -179,6 +179,7 @@ function parse(arrayBuffer, doc) {
     doc.openGroupDepth--;
   }
   doc.layers.reverse();
+  restoreGroupMaskOrigins(doc.layers);
   delete doc.openGroupDepth;
   delete doc.openGroupPaths;
   doc.buffer = allocBuffer(doc.width * doc.height * 4);
@@ -188,6 +189,36 @@ function parse(arrayBuffer, doc) {
     var channel = readChannel(bytes, channelIds[channelIdx], compressionProps, idSize, bitDepth, budget, doc.width, doc.height);
     if (channel.properties[XcfPropType.PROP_SELECTION]) {
       doc.selectionMask = { channel: channel.channelPlane, rect: new Rect(0, 0, doc.width, doc.height) };
+    }
+  }
+}
+
+/** GIMP resumes group sizing before attaching masks, ignoring stored group bounds.
+ * Include invisible children; empty direct groups do not contribute, while a
+ * group containing only empty groups contributes its fallback 1x1 bounds.
+ */
+function restoreGroupMaskOrigins(layers) {
+  var stack = [];
+  for (var layer of layers) {
+    if (layer.add.lsct == LayerSectionType.BoundingDivider) {
+      stack.push({ bounds: null, childCount: 0 });
+      continue;
+    }
+    var bounds = layer.rect;
+    var contributes = true;
+    if (layer.isGroup()) {
+      var group = stack.pop();
+      bounds = group.bounds || new Rect(0, 0, 1, 1);
+      contributes = group.childCount > 0;
+      if (layer.d) {
+        layer.d.rect.x = bounds.x;
+        layer.d.rect.y = bounds.y;
+      }
+    }
+    if (stack.length) {
+      var parent = stack[stack.length - 1];
+      parent.childCount++;
+      if (contributes) parent.bounds = parent.bounds ? parent.bounds.union(bounds) : bounds.clone();
     }
   }
 }
@@ -227,8 +258,8 @@ function readLayer(bytes, offset, doc, compressionProps, idSize, bitDepth, budge
   }
   applyLayerProps(layer, props);
   var maskRect = new Rect(layer.rect.x, layer.rect.y, layerWidth, layerHeight);
-  // Groups have an empty model rect, but their stored mask follows the XCF
-  // layer header and offsets, including negative document coordinates.
+  // Group mask dimensions come from the channel; their final origin is
+  // restored from descendants after the complete stack has been read.
   if (layer.isGroup() && props[XcfPropType.PROP_OFFSETS]) {
     maskRect.x = BinaryUtils.readInt32BE(props[XcfPropType.PROP_OFFSETS], 0);
     maskRect.y = BinaryUtils.readInt32BE(props[XcfPropType.PROP_OFFSETS], 4);

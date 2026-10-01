@@ -12,8 +12,14 @@ before(async () => {
   ({ Layer, LayerSectionType } = await import("../../../src/document/model/layer.js"));
 });
 after(() => restore?.());
-import { fixture, parse as parseFixture } from "../../helpers/xcf-structure-fixture.js";
+import { fixture, stackFixture, parse as parseFixture } from "../../helpers/xcf-structure-fixture.js";
 const parse = bytes => parseFixture(bytes, XCFParser, Layer, LayerSectionType);
+// Nonempty groups derive their origin from children, as GIMP restores sizing
+// before attaching masks. Keep offset controls distinct from empty-group cases.
+const maskFixture = options => options.group ? stackFixture({ idSize: options.idSize, layers: [
+  { ...options, maskPixels: options.maskPixels, path: [0] },
+  { offsets: options.offsets, width: options.width, height: options.height, pixels: options.pixels, path: [0, 0] },
+] }) : fixture(options);
 
 describe("XCF attached layer and group masks", () => {
   for (const idSize of [4, 8]) {
@@ -21,7 +27,7 @@ describe("XCF attached layer and group masks", () => {
       it(`retains ${group ? "group" : "layer"} mask pixels, offsets and enabled=${applyMask} (${idSize * 8}-bit)`, () => {
         const layer = parse(fixture({ idSize, group, mask: true, applyMask })).layers.at(-1);
         assert.ok(layer.d); assert.deepEqual(Array.from(layer.d.channel.subarray(0, 1)), [89]);
-        assert.deepEqual([layer.d.rect.x, layer.d.rect.y, layer.d.rect.width, layer.d.rect.height], [3, 5, 1, 1]);
+        assert.deepEqual([layer.d.rect.x, layer.d.rect.y, layer.d.rect.width, layer.d.rect.height], [...(group ? [0, 0] : [3, 5]), 1, 1]);
         assert.equal(layer.d.isEnabled, applyMask);
       });
     }
@@ -39,7 +45,7 @@ describe("XCF attached mask document alignment", () => {
     for (const offsets of [[1, 1], [-1, -1], [1, -1], [-1, 1]]) {
       it(`rasterizes ${group ? "group" : "raster"} mask at ${offsets} (${idSize * 8}-bit)`, () => {
         const samples = [17, 61, 139, 233];
-        const layer = parse(fixture({ idSize, group, mask: true, offsets, width: 2, height: 2,
+        const layer = parse(maskFixture({ idSize, group, mask: true, offsets, width: 2, height: 2,
           pixels: Array(4).fill([23, 61, 107, 255]).flat(), bpp: 4, maskPixels: samples })).layers.at(-1);
         assert.deepEqual(Array.from(layer.d.channel.subarray(0, 4)), samples);
         assert.deepEqual([layer.d.rect.x, layer.d.rect.y, layer.d.rect.width, layer.d.rect.height], [...offsets, 2, 2]);
@@ -64,7 +70,7 @@ describe("XCF group masks with independent stored dimensions", () => {
   for (const idSize of [4, 8]) for (const offsets of [[1, 1], [-1, -1]]) {
     for (const [maskWidth, maskHeight, samples] of [[1, 1, [233]], [1, 2, [17, 233]], [3, 1, [17, 139, 233]]]) {
       it(`retains ${maskWidth}×${maskHeight} group mask on 2×1 header at ${offsets} (${idSize * 8}-bit)`, () => {
-        const layer = parse(fixture({ idSize, group: true, mask: true, offsets, width: 2, height: 1,
+        const layer = parse(maskFixture({ idSize, group: true, mask: true, offsets, width: 2, height: 1,
           pixels: [23, 61, 107, 255, 73, 97, 151, 255], bpp: 4, maskWidth, maskHeight,
           maskPixels: samples })).layers.at(-1);
         assert.deepEqual([layer.d.rect.x, layer.d.rect.y, layer.d.rect.width, layer.d.rect.height],

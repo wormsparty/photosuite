@@ -40,22 +40,34 @@ export function parse(bytes, XCFParser, Layer, LayerSectionType) {
   return doc;
 }
 
-// One-pixel stack for nested topology checks; paths are stored verbatim.
-export function stackFixture({ idSize = 4, layers = [] } = {}) {
+// Small stacks for topology and independently stored mask geometry controls.
+export function stackFixture({ idSize = 4, layers = [], width = 1, height = 1 } = {}) {
   const id = idSize === 4 ? u32 : u64;
   const header = Buffer.concat([Buffer.from(idSize === 4 ? "gimp xcf v003\0" : "gimp xcf v011\0"),
-    u32(1), u32(1), u32(0), ...(idSize === 8 ? [u32(150)] : []), prop(17, Buffer.from([0])), prop(0)]);
+    u32(width), u32(height), u32(0), ...(idSize === 8 ? [u32(150)] : []), prop(17, Buffer.from([0])), prop(0)]);
   let cursor = header.length + idSize * (layers.length + 2);
   const pointers = [], objects = [];
-  for (const { group = false, flags, path = [0], title = "Tiny" } of layers) {
-    const object = Buffer.concat([u32(1), u32(1), u32(1), name(title),
+  for (const { group = false, flags, path = [0], title = "Tiny", offsets = [0, 0],
+    width: layerWidth = 1, height: layerHeight = 1, mode = 0, visible = true,
+    pixels = Array(layerWidth * layerHeight).fill([23, 61, 107, 255]).flat(),
+    maskPixels, maskWidth = layerWidth, maskHeight = layerHeight, applyMask = true } of layers) {
+    const object = Buffer.concat([u32(layerWidth), u32(layerHeight), u32(1), name(title),
+      prop(15, Buffer.concat(offsets.map(u32))), prop(7, u32(mode)), prop(8, u32(visible ? 1 : 0)),
+      ...(maskPixels ? [prop(11, u32(applyMask ? 1 : 0))] : []),
       prop(30, Buffer.concat(path.map(u32))), ...(group ? [prop(29)] : []),
       ...(flags != null ? [prop(31, u32(flags))] : []), prop(0)]);
     const hierarchy = cursor + object.length + idSize * 2;
     const level = hierarchy + 12 + idSize;
     const tile = level + 8 + idSize * 2;
-    const payload = Buffer.concat([object, id(group ? 0 : hierarchy), id(0),
-      u32(1), u32(1), u32(4), id(level), u32(1), u32(1), id(tile), id(0), Buffer.from([23, 61, 107, 255])]);
+    const maskOffset = tile + pixels.length;
+    const channel = Buffer.concat([u32(maskWidth), u32(maskHeight), name("Mask"), prop(0)]);
+    const channelHierarchy = maskOffset + channel.length + idSize;
+    const channelLevel = channelHierarchy + 12 + idSize;
+    const channelTile = channelLevel + 8 + idSize * 2;
+    const payload = Buffer.concat([object, id(group ? 0 : hierarchy), id(maskPixels ? maskOffset : 0),
+      u32(layerWidth), u32(layerHeight), u32(4), id(level), u32(layerWidth), u32(layerHeight), id(tile), id(0), Buffer.from(pixels),
+      ...(maskPixels ? [channel, id(channelHierarchy), u32(maskWidth), u32(maskHeight), u32(1), id(channelLevel),
+        u32(maskWidth), u32(maskHeight), id(channelTile), id(0), Buffer.from(maskPixels)] : [])]);
     pointers.push(id(cursor)); objects.push(payload); cursor += payload.length;
   }
   return Buffer.concat([header, ...pointers, id(0), id(0), ...objects]);
