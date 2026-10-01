@@ -204,6 +204,9 @@ function readLayer(bytes, offset, doc, compressionProps, idSize, bitDepth, budge
       savedGroupDepth > 0 && !doc.openGroupPaths[savedGroupDepth - 1].every((index, depth) => itemPath[depth] == index)) {
     throw new RangeError("xcf: invalid group parent path");
   }
+  if (props[XcfPropType.PROP_GROUP_ITEM_FLAGS] && !props[XcfPropType.PROP_GROUP_ITEM]) {
+    throw new RangeError("xcf: group flags without group item");
+  }
   applyLayerProps(layer, props);
   var maskRect = new Rect(layer.rect.x, layer.rect.y, layerWidth, layerHeight);
   // Groups have an empty model rect, but their stored mask follows the XCF
