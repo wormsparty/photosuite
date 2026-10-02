@@ -36,6 +36,37 @@ after(() => {
 });
 
 describe("document/model/layer.js", () => {
+  it("applies smart-filter masks beyond the linked pixel rectangle", () => {
+    const layer = new Layer();
+    layer.add.placedData = { filterFX: { v: {} } };
+    const mask = new Mask();
+    mask.color = 0;
+    const linkedItem = {
+      d: mask,
+      rect: new Rect(1, 0, 1, 1),
+      buffer: Uint8Array.from([10, 20, 30, 255]),
+    };
+    layer.getLinkedPlacedItem = () => linkedItem;
+    const filtered = Uint8Array.from([
+      80, 120, 160, 200,
+      90, 130, 170, 210,
+      80, 120, 160, 200,
+    ]);
+    const rect = new Rect(0, 0, 3, 1);
+
+    const blackResult = layer.applyFilterMask({}, filtered, rect);
+    assert.deepEqual([...blackResult.buffer], [0, 0, 0, 0, 10, 20, 30, 255, 0, 0, 0, 0]);
+    assert.deepEqual([...filtered.slice(0, 4)], [80, 120, 160, 200]);
+
+    mask.color = 128;
+    mask.rect = new Rect(1, 0, 1, 1);
+    mask.channel = Uint8Array.from([0]);
+    const partialResult = layer.applyFilterMask({}, filtered, rect);
+    assert.deepEqual([...partialResult.buffer.slice(0, 4)], [79, 120, 158, 100]);
+    assert.deepEqual([...partialResult.buffer.slice(4, 8)], [10, 20, 30, 255]);
+    assert.deepEqual([...partialResult.buffer.slice(8, 12)], [79, 120, 158, 100]);
+  });
+
   it("LayerSectionType enumerates PSD section markers", () => {
     assert.deepEqual(LayerSectionType, {
       Normal: 0,

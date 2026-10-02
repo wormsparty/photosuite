@@ -20,13 +20,13 @@ import { makeElement } from "../../core/dom.js";
 import { unpackDoublesList } from "../formats/psd/descriptor-codec.js";
 import { rasterizeWithMatrix } from "../render/raster-transform.js";
 import { allocBuffer, copyBuffer, equals, extractChannel, extractChannelByte, fillBuffer } from "../../engine/compositing/buffer-utils.js";
-import { contentBoundsChannel, copyChannel, copyChannelToAlpha, copyPixels, extendRgbaBuffer, getWhiteBuffer, getZeroBuffer, scaleBuffer, scaleRgbaAlphaByMask, trimRgbaToContent } from "../../engine/compositing/pixel-ops.js";
+import { contentBoundsChannel, copyChannel, copyChannelToAlpha, copyPixels, extendRgbaBuffer, getWhiteBuffer, getZeroBuffer, mulDiv255, scaleBuffer, scaleRgbaAlphaByMask, trimRgbaToContent } from "../../engine/compositing/pixel-ops.js";
 import { boundsFromCoordPairs } from "../../engine/compositing/anti-alias.js";
 import { composeHomographies, cornersToHomography } from "../../engine/compositing/homography.js";
 import { applyChannelOp, boundsOfPathRecords } from "../../engine/compositing/selection-utils.js";
 import { flattenPathKnotCoords } from "../../engine/compositing/path-records.js";
 import { createForSubpaths } from "../../engine/compositing/key-origins.js";
-import { composite, compositeDissolvedDitheredClipped, compositeLayer } from "../../engine/compositing/compositing-ops.js";
+import { composite, compositeDissolvedDitheredClipped, compositeLayer, divLut } from "../../engine/compositing/compositing-ops.js";
 import { invert } from "../../engine/compositing/color-math.js";
 import { psdColorToRgb } from "../../engine/compositing/psd-color-utils.js";
 import { getWarpControlPoints, isIdentityWarp } from "../../engine/compositing/warp.js";
@@ -301,6 +301,28 @@ export class Layer {
       invert(rasterizedMask);
       layerBuffer = layerBuffer.slice(0);
       compositeLayer(filterMaskBuffer, linkedItem.rect, layerBuffer, layerRect, rasterizedMask, layerRect, 0, layerRect, 1);
+      // The filter may extend beyond the placed pixels. There the unfiltered
+      // source is transparent, so the mask must also reduce the filtered alpha.
+      for (let y = 0; y < layerRect.height; y++) {
+        const docY = layerRect.y + y;
+        for (let x = 0; x < layerRect.width; x++) {
+          const docX = layerRect.x + x;
+          if (docX >= linkedItem.rect.x && docX < linkedItem.rect.x + linkedItem.rect.width
+            && docY >= linkedItem.rect.y && docY < linkedItem.rect.y + linkedItem.rect.height) continue;
+          const pixelIndex = y * layerRect.width + x;
+          const retained = 255 - rasterizedMask[pixelIndex];
+          if (retained == 255) continue;
+          const byteIndex = pixelIndex * 4;
+          const alpha = mulDiv255(layerBuffer[byteIndex + 3] * retained);
+          if (alpha == 0) layerBuffer.fill(0, byteIndex, byteIndex + 4);
+          else {
+            for (let channel = 0; channel < 3; channel++) {
+              layerBuffer[byteIndex + channel] = divLut[alpha << 8 | mulDiv255(layerBuffer[byteIndex + channel] * alpha)];
+            }
+            layerBuffer[byteIndex + 3] = alpha;
+          }
+        }
+      }
       return {
         buffer: layerBuffer,
         rect: layerRect
