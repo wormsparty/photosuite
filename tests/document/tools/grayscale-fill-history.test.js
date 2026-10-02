@@ -185,4 +185,34 @@ describe("grayscale fill cache and history", () => {
     });
   }
 
+  for (const preserveTransparency of [false, true]) {
+    for (const selected of [false, true]) {
+      it(`dispatches Edit Fill on an extra channel with selection ${selected} and preserve transparency ${preserveTransparency}`, () => {
+        const { mask, layer, doc, tool } = fixture("extra channel", false);
+        if (!selected) doc.selectionMask = null;
+        const artwork = layer.buffer.slice();
+        const original = mask.channel.slice();
+        const descriptor = {
+          Usng: { v: { FlCn: "Blck" } },
+          Opct: { v: { val: 100 } },
+          PrsT: { v: preserveTransparency },
+        };
+        tool.handleInput({ actionKind: "fromAction", scriptActionPayload: { uf: "fill", actionDescriptor: descriptor } }, {}, doc, {}, {});
+        assert.equal(doc.entry.data[0].layerIndex, -1);
+        assert.deepEqual(Array.from(mask.getMaskForRect(new Rect(2, 3, 4, 2))), selected
+          ? [20, 20, 20, 20, 20, 9, 0, 20]
+          : Array(8).fill(0));
+        const filled = mask.channel.slice();
+        tool.undo(doc.entry.data, doc);
+        // Unselected fills extend the channel to document bounds; compare its
+        // original region through the production mask extraction method.
+        assert.deepEqual(mask.getMaskForRect(new Rect(2, 3, 4, 2)), original);
+        tool.redo(doc.entry.data, doc);
+        assert.deepEqual(mask.channel, filled);
+        assert.deepEqual(layer.buffer, artwork);
+        assert.equal(layer.add.lspf, undefined);
+      });
+    }
+  }
+
 });

@@ -294,9 +294,9 @@ PaintTool.prototype.handleInput = function(event, dispatcher, doc, keyboard, poi
 /** Scripted Edit > Fill: solid color, content-aware heal, with optional transparency lock. */
 PaintTool.prototype.applyScriptedFill = function(doc, targetLayer, fillDescriptor, pointerState) {
   var preserveTransparency = fillDescriptor.PrsT ? fillDescriptor.PrsT.v : false,
-    originalLspf = targetLayer.add.lspf,
+    originalLspf = targetLayer ? targetLayer.add.lspf : null,
     fillColorInt;
-  if (preserveTransparency) {
+  if (preserveTransparency && targetLayer) {
     targetLayer.add.lspf = originalLspf == null ? 1 : originalLspf | 1
   }
   var fillOpacity = (fillDescriptor.Opct ? fillDescriptor.Opct.v.val : 100) / 100,
@@ -331,7 +331,7 @@ PaintTool.prototype.applyScriptedFill = function(doc, targetLayer, fillDescripto
       fillBlue = fillColorInt >> 0 & 255;
     this.fillRegionWithColor(doc, targetLayer, doc.selectionMask, fillRed, fillGreen, fillBlue, Math.round(255 * fillOpacity), fillBlendMode, "edit.fill")
   }
-  if (preserveTransparency) {
+  if (preserveTransparency && targetLayer) {
     targetLayer.add.lspf = originalLspf == null ? 0 : originalLspf
   }
 };
