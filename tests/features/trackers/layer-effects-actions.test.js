@@ -290,6 +290,54 @@ describe("features/trackers/layer-effects-actions.js", () => {
     assert.equal(doc.history.length, 0);
   });
 
+  it("ignores vector-mask actions whose layer references are stale", () => {
+    const tracker = new TrackerRegistry.LayerEffectsTracker();
+    const source = makeLayer({ add: {} });
+    const destination = makeLayer({ add: {} });
+    const doc = makeDoc([source, destination]);
+
+    assert.doesNotThrow(() => tracker.handleInput(
+      { actionKind: Layer.toggleVectorMask, layerIndex: 4 },
+      {}, doc, idleKeyboard(), {},
+    ));
+    assert.doesNotThrow(() => tracker.handleInput(
+      { actionKind: Layer.addVectorMask, layerIndex: 4 },
+      {}, doc, idleKeyboard(), {},
+    ));
+    assert.doesNotThrow(() => tracker.handleInput(
+      { actionKind: Layer.deleteVectorMask, layerIndex: 4 },
+      {}, doc, idleKeyboard(), {},
+    ));
+    assert.doesNotThrow(() => tracker.handleInput(
+      {
+        actionKind: Layer.moveVectorMask,
+        sourceLayerIndex: 4,
+        destinationLayerIndex: 1,
+        keepSourceOnCopy: false,
+      },
+      {}, doc, idleKeyboard(), {},
+    ));
+    assert.equal(doc.history.length, 0);
+  });
+
+  it("ignores vector-mask moves when the source no longer has a mask", () => {
+    const tracker = new TrackerRegistry.LayerEffectsTracker();
+    const source = makeLayer({ add: {} });
+    const destination = makeLayer({ add: {} });
+    const doc = makeDoc([source, destination]);
+
+    assert.doesNotThrow(() => tracker.handleInput(
+      {
+        actionKind: Layer.moveVectorMask,
+        sourceLayerIndex: 0,
+        destinationLayerIndex: 1,
+        keepSourceOnCopy: false,
+      },
+      {}, doc, idleKeyboard(), {},
+    ));
+    assert.equal(doc.history.length, 0);
+  });
+
   it("ignores smart-filter delete and move actions without a filter stack", () => {
     const tracker = new TrackerRegistry.LayerEffectsTracker();
     const layer = makeLayer({ add: {} });

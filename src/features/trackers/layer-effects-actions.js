@@ -347,6 +347,7 @@ function handleSelectLayer(event, dispatcher, doc, panelContext, appData, eventC
 }
 
 function handleToggleVectorMask(event, dispatcher, doc, panelContext, appData, eventCode, layerIndex, targetLayer) {
+  if (targetLayer == null || targetLayer.add == null) return;
   const mask = targetLayer.add.vmsk;
   if (mask == null) return;
   const historyEntry = createHistoryEntry(
@@ -876,6 +877,7 @@ function handleClearSmartFilters(event, dispatcher, doc, panelContext, appData, 
 
 function handleAddVectorMask(event, dispatcher, doc, panelContext, appData, eventCode, layerIndex, targetLayer) {
     if (doc.selectedLayerIndices.length != 1) return;
+    if (targetLayer == null || targetLayer.add == null) return;
     if (targetLayer.add.vmsk == null) {
     const pathsTuple = doc.getPaths();
     const activePathIndices = pathsTuple[1];
@@ -909,6 +911,11 @@ function handleAddVectorMask(event, dispatcher, doc, panelContext, appData, even
 function handleMoveVectorMask(event, dispatcher, doc, panelContext, appData, eventCode) {
   const sourceLayer = doc.layers[event.sourceLayerIndex];
   const destLayer = doc.layers[event.destinationLayerIndex];
+  if (
+    sourceLayer == null || sourceLayer.add == null ||
+    destLayer == null || destLayer.add == null ||
+    sourceLayer.add.vmsk == null
+  ) return;
     if (destLayer.add.vmsk) return;
   const sourceVectorMask = sourceLayer.add.vmsk;
   const historyEntry = createHistoryEntry("layer.addVectorMask", this, {
@@ -931,6 +938,7 @@ function handleMoveVectorMask(event, dispatcher, doc, panelContext, appData, eve
 function handleDeleteVectorMask(event, dispatcher, doc, panelContext, appData, eventCode, layerIndex) {
     if (doc.selectedLayerIndices.length != 1) return;
   const layer = doc.layers[layerIndex];
+  if (layer == null || layer.add == null) return;
   const vectorMask = layer.add.vmsk;
     if (vectorMask != null) {
     const historyEntry = createHistoryEntry("layer.deleteVectorMask", this, {
