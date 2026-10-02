@@ -268,12 +268,11 @@ it("red-eye channel payload matches the setChannelData {bounds, hslShift} contra
     assert.equal(maskTarget.pixelContentKind, 1);
   });
 
-  it("transparency-locked brush skips history and restores empty layer storage for an invisible stroke", () => {
+  it("transparency-locked brush on an empty layer leaves pixels unchanged but records history, as Photoshop does", () => {
     const layer = new Layer();
     layer.rect = new Rect(0, 0, 0, 0);
     layer.buffer = allocBuffer(1);
     layer.add.lspf = 1;
-    const originalBuffer = layer.buffer.slice();
     const history = [];
     const doc = {
       width: 2,
@@ -295,9 +294,9 @@ it("red-eye channel payload matches the setChannelData {bounds, hslShift} contra
     tool.compositeStrokeToLayer(doc, "draw", redStroke, strokeRect, strokeRect);
     tool.finish(doc, strokeRect);
 
-    assert.equal(history.length, 0, "a stroke with no visible pixels must not add Undo history");
-    assert.deepEqual(layer.rect, new Rect(0, 0, 0, 0));
-    assert.deepEqual(layer.buffer, originalBuffer);
+    assert.equal(history.length, 1, "every completed stroke is an Undo step");
+    assert.ok(Array.from(layer.buffer).every((value, index) => index % 4 !== 3 || value === 0),
+      "locked transparent pixels stay transparent");
   });
 
   it("paste onto an empty transparency-locked layer keeps its pixels and history", () => {
