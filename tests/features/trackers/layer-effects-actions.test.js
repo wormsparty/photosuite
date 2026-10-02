@@ -104,6 +104,34 @@ describe("features/trackers/layer-effects-actions.js", () => {
     assert.equal(doc.history.length, 0);
   });
 
+  it("ignores filter-mask enable actions when the selected layer has no linked smart object", () => {
+    const tracker = new TrackerRegistry.LayerEffectsTracker();
+    const layer = makeLayer({
+      getLinkedPlacedItem() { return null; },
+      add: {},
+    });
+    const doc = makeDoc([layer]);
+
+    assert.doesNotThrow(() => tracker.handleInput(
+      { actionKind: Layer.toggleFilterMask }, {}, doc, idleKeyboard(), {},
+    ));
+    assert.equal(doc.history.length, 0);
+  });
+
+  it("ignores smart-filter master and variant toggles without a filter stack", () => {
+    const tracker = new TrackerRegistry.LayerEffectsTracker();
+    const layer = makeLayer({ add: {} });
+    const doc = makeDoc([layer]);
+
+    assert.doesNotThrow(() => tracker.handleInput(
+      { actionKind: Layer.toggleSmartFiltersMaster }, {}, doc, idleKeyboard(), {},
+    ));
+    assert.doesNotThrow(() => tracker.handleInput(
+      { actionKind: Layer.toggleSmartFilterVariant, index: 0 }, {}, doc, idleKeyboard(), {},
+    ));
+    assert.equal(doc.history.length, 0);
+  });
+
   it("opacity byte 128 serializes to 50 percent on the action descriptor", () => {
     const tracker = new TrackerRegistry.LayerEffectsTracker();
     tracker.track = () => {};

@@ -1050,7 +1050,8 @@ function handleUpdateContentStyle(event, dispatcher, doc, panelContext, appData,
 
 function handleToggleRasterOrFilterMask(event, dispatcher, doc, panelContext, appData, eventCode, layerIndex, targetLayer) {
   const isRasterMaskEvent = eventCode == Layer.toggleRasterMask;
-  const mask = isRasterMaskEvent ? targetLayer.getMask() : targetLayer.getLinkedPlacedItem(doc).d;
+  const linkedItem = isRasterMaskEvent ? null : targetLayer.getLinkedPlacedItem(doc);
+  const mask = isRasterMaskEvent ? targetLayer.getMask() : linkedItem && linkedItem.d;
     if (mask == null) return;
   const historyLabel = mask.isEnabled
     ? isRasterMaskEvent
@@ -1073,12 +1074,14 @@ function handleToggleMasterFx(event, dispatcher, doc, panelContext, appData, eve
     );
   }
   if (eventCode == Layer.toggleSmartFiltersMaster) {
+    if (targetLayer.add.placedData == null || targetLayer.add.placedData.filterFX == null) return;
     historyEntry = createHistoryEntry(
       targetLayer.add.placedData.filterFX.v.enab.v ? "layer.disableSmartFilters" : "layer.enableSmartFilters",
       this,
       { actionKind: eventCode, layerIndex },
     );
   }
+  if (historyEntry == null) return;
   commitHistoryAndRedo(this, doc, historyEntry);
 }
 
@@ -1095,6 +1098,8 @@ function handleToggleEffectVariant(event, dispatcher, doc, panelContext, appData
     );
   }
   if (eventCode == Layer.toggleSmartFilterVariant) {
+    if (targetLayer.add.placedData == null || targetLayer.add.placedData.filterFX == null) return;
+    if (targetLayer.add.placedData.filterFX.v.filterFXList.v[effectPathIdx] == null) return;
     historyEntry = createHistoryEntry(
       targetLayer.add.placedData.filterFX.v.filterFXList.v[effectPathIdx].v.enab.v
         ? "layer.disableSmartFilters"
@@ -1103,6 +1108,7 @@ function handleToggleEffectVariant(event, dispatcher, doc, panelContext, appData
       { actionKind: eventCode, layerIndex, index: event.index },
     );
   }
+  if (historyEntry == null) return;
   commitHistoryAndRedo(this, doc, historyEntry);
 }
 
