@@ -119,6 +119,41 @@ describe("features/trackers/layer-effects-actions.js", () => {
     assert.deepEqual(doc.history[0].data.activeChannelsBefore, [0, 2]);
   });
 
+  it("ignores a recorded hide action when no extra channel is active", () => {
+    const tracker = new TrackerRegistry.LayerEffectsTracker();
+    const doc = makeDoc([makeLayer()], {
+      extraChannels: [new Mask()],
+      activeChannels: [],
+      selectionMask: null,
+    });
+
+    assert.doesNotThrow(() => tracker.handleInput(
+      {
+        actionKind: Layer.extraChannelOp,
+        operation: "fromAction",
+        recordedActionPayload: { uf: "hide", actionDescriptor: {} },
+      }, {}, doc, idleKeyboard(), {},
+    ));
+    assert.equal(doc.history.length, 0);
+    assert.equal(doc.extraChannels[0].active, false);
+  });
+
+  it("ignores a channel rename whose index is no longer present", () => {
+    const tracker = new TrackerRegistry.LayerEffectsTracker();
+    const doc = makeDoc([makeLayer()], {
+      extraChannels: [new Mask()],
+      activeChannels: [],
+      selectionMask: null,
+    });
+
+    assert.doesNotThrow(() => tracker.handleInput(
+      { actionKind: Layer.extraChannelOp, operation: "rnm", idx: 4, name: "Missing" },
+      {}, doc, idleKeyboard(), {},
+    ));
+    assert.equal(doc.history.length, 0);
+    assert.equal(doc.extraChannels[0].name, "Mask");
+  });
+
   it("ignores filter-mask actions when the selected layer has no linked smart object", () => {
     const tracker = new TrackerRegistry.LayerEffectsTracker();
     const layer = makeLayer({ getLinkedPlacedItem() { return null; } });

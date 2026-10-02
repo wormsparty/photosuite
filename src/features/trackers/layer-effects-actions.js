@@ -711,7 +711,10 @@ function applyExtraChannelFromAction(event, doc, extraChannelsAfter, activeChann
     }
     activeChannelsAfter.length = 0;
       } else if (actionKind == "hide") {
-        extraChannelsAfter[activeChannelsAfter[0]] = extraChannelsAfter[activeChannelsAfter[0]].clone();
+    if (activeChannelsAfter.length == 0) return { selectionAfter, abort: true };
+    const activeChannel = extraChannelsAfter[activeChannelsAfter[0]];
+    if (activeChannel == null) return { selectionAfter, abort: true };
+    extraChannelsAfter[activeChannelsAfter[0]] = activeChannel.clone();
     extraChannelsAfter[activeChannelsAfter[0]].active = false;
   }
   return { selectionAfter, abort: false };
@@ -732,11 +735,12 @@ function handleExtraChannelOp(event, dispatcher, doc, panelContext, appData, eve
     );
     if (result.abort) return;
     selectionMaskAfter = result.selectionAfter;
-    }
-    if (event.operation == "rnm") {
-      extraChannelsAfter[event.idx] = extraChannelsAfter[event.idx].clone();
+  }
+  if (event.operation == "rnm") {
+    if (!Number.isInteger(event.idx) || event.idx < 0 || event.idx >= extraChannelsAfter.length) return;
+    extraChannelsAfter[event.idx] = extraChannelsAfter[event.idx].clone();
     extraChannelsAfter[event.idx].name = event.name;
-    }
+  }
   const historyEntry = createHistoryEntry("Channel Edit", this, {
       actionKind: eventCode,
       extraChannelsBefore: doc.extraChannels.slice(0),
