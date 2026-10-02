@@ -137,4 +137,52 @@ describe("grayscale fill cache and history", () => {
       });
     }
   }
+  for (const kind of ["extra channel", "layer mask", "smart-filter mask"]) {
+    for (const cached of kind === "extra channel" ? [false] : [false, true]) {
+      for (const opacity of [64, 128, 255]) {
+        it(`preserves fractional selection endpoints for ${cached ? "cached" : "uncached"} ${kind} at ${opacity}`, () => {
+          const { mask, layer, doc, tool } = fixture(kind, false);
+          doc.selectionMask = { rect: mask.rect.clone(), channel: new Uint8Array([0, 1, 64, 127, 128, 192, 254, 255]) };
+          if (cached) layer.updatePixCache(doc, doc.selectionMask, true);
+          const original = mask.channel.slice();
+          tool.fillRegionWithColor(doc, layer, doc.selectionMask, 220, 220, 220, opacity, "norm", "edit.fill");
+          const cacheValue = Math.floor(20 + 200 * opacity / 255);
+          const expected = Array.from(doc.selectionMask.channel, weight => cached
+            ? Math.floor(cacheValue * weight / 255 + 20 * (1 - weight / 255))
+            : Math.floor(20 + 200 * Math.floor(opacity * weight / 255) / 255));
+          assert.deepEqual(Array.from(mask.channel), expected);
+          const filled = mask.channel.slice();
+          tool.undo(doc.entry.data, doc);
+          assert.deepEqual(mask.channel, original);
+          tool.redo(doc.entry.data, doc);
+          assert.deepEqual(mask.channel, filled);
+        });
+      }
+    }
+  }
+  for (const focus of [0, 1, 3]) {
+    it(`prioritizes extra channel fill and history over a cached layer with focus ${focus}`, () => {
+      const { mask, unrelatedMask, layer, doc, tool } = fixture("layer mask", true);
+      doc.extraChannels = [mask, unrelatedMask];
+      doc.activeChannels = [1, 0];
+      const original = unrelatedMask.channel.slice();
+      const layerOriginal = mask.channel.slice();
+      const pixelsOriginal = layer.buffer.slice();
+      const cacheOriginal = layer.pixCache;
+      tool.fillRegionWithColor(doc, layer, doc.selectionMask, 220, 220, 220, 128, "norm", "edit.fill");
+      assert.equal(doc.entry.data[0].layerIndex, -2);
+      const filled = unrelatedMask.channel.slice();
+      assert.notDeepEqual(filled, original);
+      doc.activeChannels = [];
+      layer.pixelContent = focus;
+      tool.undo(doc.entry.data, doc);
+      assert.deepEqual(unrelatedMask.channel, original);
+      tool.redo(doc.entry.data, doc);
+      assert.deepEqual(unrelatedMask.channel, filled);
+      assert.deepEqual(mask.channel, layerOriginal);
+      assert.deepEqual(layer.buffer, pixelsOriginal);
+      assert.equal(layer.pixCache, cacheOriginal);
+    });
+  }
+
 });
