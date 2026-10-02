@@ -388,10 +388,11 @@ SelectTool.prototype.applyScriptedShapeSelection = function(operationKind, descr
       selectionSource: [layerIndex, layerChannelKind, channelCombineModeIndex],
     };
   } else if (channelDescriptorList[0].t == "name") {
-    let extraChannelIndex = 0;
+    let extraChannelIndex = -1;
     for (let channelIdx = 0; channelIdx < doc.extraChannels.length; channelIdx++) {
       if (doc.extraChannels[channelIdx].name == channelDescriptorList[0].v.val) extraChannelIndex = channelIdx;
     }
+    if (extraChannelIndex < 0) return null;
     nestedEvent = {
       actionKind: "fromchannel",
       selectionSource: [-5 - extraChannelIndex, 0, channelCombineModeIndex],
@@ -518,6 +519,7 @@ SelectTool.prototype.selectionFromSource = function(eventKind, event, doc) {
   } else {
     if (sourceIndex == null) sourceIndex = getDefaultChannelIndexForLoad(doc);
     outcome.selection = loadChannelAsSelectionMask(doc, sourceIndex);
+    if (outcome.selection == null) return null;
   }
   if (combineModeIndex != 0 && doc.selectionMask) {
     outcome.selection = applyChannelOp(outcome.selection, doc.selectionMask, ["", "union", "difference", "intersection"][combineModeIndex]);
@@ -940,4 +942,3 @@ RectSelectTool.prototype = Object.create(SelectTool.prototype);
 installRectSelectToolPrototype();
 EllipseSelectTool.prototype = Object.create(SelectTool.prototype);
 installEllipseSelectToolPrototype();
-

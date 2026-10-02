@@ -13,6 +13,7 @@ let MagicWandTool;
 let QuickSelectTool;
 let RectSelectTool;
 let SelectTool;
+let Mask;
 
 
 // Chain the tool prototypes these tests construct from.
@@ -28,6 +29,7 @@ before(async () => {
   await import("../../../src/document/tools/selection-tools.js");
   await import("../../../src/document/tools/lasso-tools.js");
   ({ EllipseSelectTool, MagicWandTool, QuickSelectTool, RectSelectTool, SelectTool } = await import("../../../src/document/tools/selection-tools.js"));
+  ({ Mask } = await import("../../../src/document/model/layer-masks.js"));
 });
 
 after(() => {
@@ -114,6 +116,70 @@ describe("document/tools/selection-tools.js", () => {
     assert.equal(path.commands[0], "M");
     assert.ok(path.commands.includes("C") || path.commands.includes("Z") || path.commands.length > 1);
     assert.ok(path.coords.length >= 4);
+  });
+
+  it("loads a valid extra channel as a selection and ignores stale channel references", () => {
+    const channel = new Mask();
+    channel.color = 0;
+    channel.rect = new Rect(0, 0, 2, 1);
+    channel.channel = new Uint8Array([255, 0]);
+    const priorSelection = { rect: new Rect(1, 0, 1, 1), channel: new Uint8Array([255]) };
+    const history = [];
+    const doc = {
+      width: 2, height: 1, extraChannels: [channel], activeChannels: [0],
+      pathViewport: { channelVisibility: [1, 1, 1] }, selectionMask: priorSelection,
+      pushHistory(entry) { history.push(entry); },
+    };
+    const tool = new SelectTool("Select", ToolId.TOOL_RECT_SELECT, "");
+    const dispatcher = { dispatch() {} };
+    const appData = { extras: true, prefs: { showSelectionEdges: true } };
+
+    for (const channelIndex of [-6, -5.5, -999]) {
+      tool.handleInput({ actionKind: "fromchannel", selectionSource: [channelIndex, 0, 0] }, dispatcher, doc, null, appData);
+      assert.equal(doc.selectionMask, priorSelection);
+      assert.equal(history.length, 0);
+    }
+    doc.activeChannels = [4];
+    tool.handleInput({ actionKind: "fromchannel", selectionSource: [null, 0, 0] }, dispatcher, doc, null, appData);
+    assert.equal(doc.selectionMask, priorSelection);
+    assert.equal(history.length, 0);
+
+    tool.handleInput({ actionKind: "fromchannel", selectionSource: [-5, 0, 0] }, dispatcher, doc, null, appData);
+    assert.equal(history.length, 1);
+    assert.deepEqual(Array.from(doc.selectionMask.channel.subarray(0, doc.selectionMask.rect.area())), [255]);
+    assert.deepEqual([doc.selectionMask.rect.x, doc.selectionMask.rect.width], [0, 1]);
+  });
+
+  it("does not resolve an absent named extra channel to the first channel", () => {
+    const channel = new Mask();
+    channel.name = "Existing";
+    channel.color = 0;
+    channel.rect = new Rect(0, 0, 2, 1);
+    channel.channel = new Uint8Array([255, 0]);
+    const priorSelection = { rect: new Rect(1, 0, 1, 1), channel: new Uint8Array([255]) };
+    const history = [];
+    const doc = {
+      width: 2, height: 1, extraChannels: [channel], activeChannels: [],
+      selectionMask: priorSelection, pushHistory(entry) { history.push(entry); },
+    };
+    const tool = new SelectTool("Select", ToolId.TOOL_RECT_SELECT, "");
+    const dispatcher = { dispatch() {} };
+    const appData = { extras: true, prefs: { showSelectionEdges: true } };
+    const namedLoad = (name) => ({
+      actionKind: "fromAction",
+      scriptActionPayload: {
+        uf: "set",
+        actionDescriptor: { T: { v: [{ t: "name", v: { val: name } }] } },
+      },
+    });
+
+    tool.handleInput(namedLoad("Missing"), dispatcher, doc, null, appData);
+    assert.equal(doc.selectionMask, priorSelection);
+    assert.equal(history.length, 0);
+    tool.handleInput(namedLoad("Existing"), dispatcher, doc, null, appData);
+    assert.equal(history.length, 1);
+    assert.deepEqual(Array.from(doc.selectionMask.channel.subarray(0, doc.selectionMask.rect.area())), [255]);
+    assert.equal(doc.selectionMask.rect.x, 0);
   });
 
 });

@@ -250,6 +250,12 @@ export function getDefaultChannelIndexForLoad(doc) {
 
 /** Load an RGB channel (-1..-4) or extra channel (≤ -5) as a selection mask. */
 export function loadChannelAsSelectionMask(doc, channelIndex) {
+  if (!Number.isInteger(channelIndex)) return undefined;
+  if (channelIndex < -4 && (
+    !Array.isArray(doc.extraChannels)
+    || -channelIndex - 5 >= doc.extraChannels.length
+    || doc.extraChannels[-channelIndex - 5] == null
+  )) return undefined;
   const canvasRect = new Rect(0, 0, doc.width, doc.height);
   if (-5 < channelIndex && channelIndex < 0) {
     const rgbChannelIndex = -channelIndex - 1;
