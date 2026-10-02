@@ -180,7 +180,7 @@ LayerStyleRow.prototype.onMouseUp = function(evt) {
     this._suppressNextClick = false;
     return
   }
-  if (evt.target == this.styleVisibilityEyeEl) return;
+  if (evt.target == this.styleVisibilityEyeEl || this.rasterMaskThumbWrap?.contains(evt.target)) return;
   const layerIndex = this.parent.sectionNode.index;
   if (evt.detail != 1 && this.dialogRouteId != null) {
     const uiEvt = new AppEvent(EventType.uiDispatch, true);
