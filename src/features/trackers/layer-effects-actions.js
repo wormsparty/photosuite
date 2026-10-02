@@ -779,7 +779,8 @@ function handleApplyClipboardLayer(event, dispatcher, doc, panelContext, appData
 function handleAddFilterMask(event, dispatcher, doc, panelContext, appData, eventCode) {
     if (doc.selectedLayerIndices.length != 1) return;
   const selectedLayerIndex = doc.selectedLayerIndices[0];
-    if (doc.layers[selectedLayerIndex].getLinkedPlacedItem(doc).d == null) {
+  const linkedItem = doc.layers[selectedLayerIndex].getLinkedPlacedItem(doc);
+    if (linkedItem && linkedItem.d == null) {
     const historyEntry = createHistoryEntry("layer.addFilterMask", this, {
         actionKind: eventCode,
         layerIndex: selectedLayerIndex,
@@ -792,7 +793,8 @@ function handleAddFilterMask(event, dispatcher, doc, panelContext, appData, even
 function handleDeleteFilterMask(event, dispatcher, doc, panelContext, appData, eventCode) {
     if (doc.selectedLayerIndices.length != 1) return;
   const selectedLayerIndex = doc.selectedLayerIndices[0];
-    if (doc.layers[selectedLayerIndex].getLinkedPlacedItem(doc).d != null) {
+  const linkedItem = doc.layers[selectedLayerIndex].getLinkedPlacedItem(doc);
+    if (linkedItem && linkedItem.d != null) {
     const historyEntry = createHistoryEntry("layer.deleteFilterMask", this, {
         actionKind: eventCode,
         layerIndex: selectedLayerIndex,

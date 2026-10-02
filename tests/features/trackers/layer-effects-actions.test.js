@@ -90,6 +90,20 @@ function idleKeyboard() {
 }
 
 describe("features/trackers/layer-effects-actions.js", () => {
+  it("ignores filter-mask actions when the selected layer has no linked smart object", () => {
+    const tracker = new TrackerRegistry.LayerEffectsTracker();
+    const layer = makeLayer({ getLinkedPlacedItem() { return null; } });
+    const doc = makeDoc([layer]);
+
+    assert.doesNotThrow(() => tracker.handleInput(
+      { actionKind: Layer.addFilterMask }, {}, doc, idleKeyboard(), {},
+    ));
+    assert.doesNotThrow(() => tracker.handleInput(
+      { actionKind: Layer.deleteFilterMask }, {}, doc, idleKeyboard(), {},
+    ));
+    assert.equal(doc.history.length, 0);
+  });
+
   it("opacity byte 128 serializes to 50 percent on the action descriptor", () => {
     const tracker = new TrackerRegistry.LayerEffectsTracker();
     tracker.track = () => {};
