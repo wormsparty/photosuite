@@ -12,6 +12,7 @@ let Mask;
 let VectorMask;
 let Rect;
 let restoreBrowserGlobals;
+let offsetSelectionRect;
 
 before(async () => {
   restoreBrowserGlobals = installBrowserGlobals();
@@ -29,6 +30,7 @@ before(async () => {
   ({ Mask, VectorMask } = await import(
     "../../../src/document/model/layer-masks.js"
   ));
+  ({ offsetSelectionRect } = await import("../../../src/document/model/layer-translate.js"));
 });
 
 after(() => {
@@ -36,6 +38,43 @@ after(() => {
 });
 
 describe("document/model/layer.js", () => {
+  it("moves a spatially partial smart-filter-mask selection and keeps its overlay cache in sync", () => {
+    const layer = new Layer();
+    layer.pixelContent = 3;
+    layer.rect = new Rect(0, 0, 5, 1);
+    layer.buffer = new Uint8Array(20);
+    const mask = new Mask();
+    mask.color = 0;
+    mask.rect = new Rect(0, 0, 5, 1);
+    mask.channel = Uint8Array.from([10, 40, 80, 120, 160]);
+    layer.getLinkedPlacedItem = () => ({ d: mask });
+    const selectionMask = {
+      rect: new Rect(1, 0, 2, 1),
+      channel: Uint8Array.from([255, 128]),
+    };
+    const doc = {
+      layers: [layer], selectionMask,
+      markDirty() { this.dirty = true; },
+    };
+    layer.updatePixCache(doc, selectionMask, false);
+    const original = mask.channel.slice();
+
+    offsetSelectionRect(doc, 0, 1, 0);
+
+    assert.deepEqual(selectionMask.rect, new Rect(2, 0, 2, 1));
+    assert.deepEqual(layer.pixCache.selectionRect, selectionMask.rect);
+    assert.equal(mask.channel[0], original[0]);
+    assert.equal(mask.channel[4], original[4]);
+    assert.notEqual(mask.channel[1], original[1]);
+    assert.equal(layer.checkPixelCache(doc, selectionMask), true);
+    assert.equal(doc.needsComposite, true);
+    assert.equal(doc.dirty, true);
+
+    offsetSelectionRect(doc, 0, -1, 0);
+    assert.deepEqual(selectionMask.rect, new Rect(1, 0, 2, 1));
+    assert.equal(layer.checkPixelCache(doc, selectionMask), true);
+  });
+
   it("applies smart-filter masks beyond the linked pixel rectangle", () => {
     const layer = new Layer();
     layer.add.placedData = { filterFX: { v: {} } };
