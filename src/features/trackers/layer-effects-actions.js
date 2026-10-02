@@ -844,7 +844,9 @@ function handleApplyClipboardLayer(event, dispatcher, doc, panelContext, appData
 function handleAddFilterMask(event, dispatcher, doc, panelContext, appData, eventCode) {
     if (doc.selectedLayerIndices.length != 1) return;
   const selectedLayerIndex = doc.selectedLayerIndices[0];
-  const linkedItem = doc.layers[selectedLayerIndex].getLinkedPlacedItem(doc);
+  const selectedLayer = doc.layers[selectedLayerIndex];
+  if (selectedLayer == null) return;
+  const linkedItem = selectedLayer.getLinkedPlacedItem(doc);
     if (linkedItem && linkedItem.d == null) {
     const historyEntry = createHistoryEntry("layer.addFilterMask", this, {
         actionKind: eventCode,
@@ -858,12 +860,14 @@ function handleAddFilterMask(event, dispatcher, doc, panelContext, appData, even
 function handleDeleteFilterMask(event, dispatcher, doc, panelContext, appData, eventCode) {
     if (doc.selectedLayerIndices.length != 1) return;
   const selectedLayerIndex = doc.selectedLayerIndices[0];
-  const linkedItem = doc.layers[selectedLayerIndex].getLinkedPlacedItem(doc);
+  const selectedLayer = doc.layers[selectedLayerIndex];
+  if (selectedLayer == null) return;
+  const linkedItem = selectedLayer.getLinkedPlacedItem(doc);
     if (linkedItem && linkedItem.d != null) {
     const historyEntry = createHistoryEntry("layer.deleteFilterMask", this, {
         actionKind: eventCode,
         layerIndex: selectedLayerIndex,
-      maskSnapshot: doc.layers[selectedLayerIndex].getLinkedPlacedItem(doc).d,
+      maskSnapshot: linkedItem.d,
     });
     commitHistoryAndRedo(this, doc, historyEntry);
   }

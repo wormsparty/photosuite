@@ -290,6 +290,21 @@ describe("features/trackers/layer-effects-actions.js", () => {
     assert.equal(doc.history.length, 0);
   });
 
+  it("ignores filter-mask creation and deletion when the selected layer reference is stale", () => {
+    const tracker = new TrackerRegistry.LayerEffectsTracker();
+    const linkedItem = { d: null };
+    const layer = makeLayer({ getLinkedPlacedItem() { return linkedItem; } });
+    const doc = makeDoc([layer], { selectedLayerIndices: [3] });
+
+    for (const actionKind of [Layer.addFilterMask, Layer.deleteFilterMask]) {
+      assert.doesNotThrow(() => tracker.handleInput(
+        { actionKind }, {}, doc, idleKeyboard(), {},
+      ));
+    }
+    assert.equal(doc.history.length, 0);
+    assert.equal(linkedItem.d, null);
+  });
+
   it("ignores filter-mask enable actions when the selected layer has no linked smart object", () => {
     const tracker = new TrackerRegistry.LayerEffectsTracker();
     const layer = makeLayer({
