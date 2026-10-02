@@ -74,3 +74,32 @@ describe("TransformToolBase.buildRotateOrFlipAction", () => {
     assert.equal(action.actionDescriptor.Angl, undefined);
   });
 });
+
+describe("TransformToolBase.resolveTransformTargetLayers", () => {
+  function makeDoc(activeChannels) {
+    return {
+      activeChannels,
+      extraChannels: [{}, {}],
+      paths: [],
+      selectedWorkPaths: [],
+      selectedLayerPaths: [],
+      pathViewport: { channelVisibility: [1, 1, 1] },
+      getPaths() {},
+      resolveLayerSelection: () => [0],
+    };
+  }
+
+  it("rejects malformed active channel references before encoding transform targets", () => {
+    for (const activeChannels of [[-1], [2], [0.5], [0, 0]]) {
+      const tool = Object.create(TransformToolBase.prototype);
+      tool.resolveTransformTargetLayers(makeDoc(activeChannels), true, 0);
+      assert.deepEqual(tool.targetIndices, [], `malformed active channels: ${activeChannels}`);
+    }
+  });
+
+  it("encodes valid extra-channel references after the selected layer", () => {
+    const tool = Object.create(TransformToolBase.prototype);
+    tool.resolveTransformTargetLayers(makeDoc([0, 1]), true, 0);
+    assert.deepEqual(tool.targetIndices, [0, -1000, -1001]);
+  });
+});

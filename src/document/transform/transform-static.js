@@ -79,6 +79,17 @@ function makeUnitFloat(value, unitTypeIndex) {
  * @returns {number[]}
  */
 function resolveTransformTarget(doc, includeSelection, pathIndices) {
+  const activeChannelSet = new Set(doc.activeChannels);
+  if (
+    activeChannelSet.size !== doc.activeChannels.length
+    || !doc.activeChannels.every((channelIndex) =>
+      Number.isInteger(channelIndex)
+      && channelIndex >= 0
+      && channelIndex < doc.extraChannels.length,
+    )
+  ) {
+    return [];
+  }
   doc.getPaths();
   const pathTargetIndices = [];
   if (pathIndices == null) {
