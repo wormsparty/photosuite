@@ -53,7 +53,12 @@ export function clipboardImageSignature(frame) {
 export function isStaleClipboardFrame(frame, baselineSignature) {
   if (!frame || baselineSignature == null) return false;
   if (baselineSignature === CLIPBOARD_SIGNATURE_PENDING) return true;
-  return clipboardImageSignature(frame) === baselineSignature;
+  // Large pasteboard images are probed by dimensions only. Compare the pasted
+  // frame at the same granularity, or a large stale image never matches.
+  const frameSignature = baselineSignature.indexOf(":") === -1
+    ? clipboardImageSignature({ width: frame.width, height: frame.height })
+    : clipboardImageSignature(frame);
+  return frameSignature === baselineSignature;
 }
 
 /** @returns {import("@tauri-apps/plugin-clipboard-manager").ClipboardManager | null} */

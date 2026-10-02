@@ -93,6 +93,21 @@ describe("core/system-clipboard.js", () => {
       assert.equal(isStaleClipboardFrame(pngIcon, "512x512"), true);
     });
 
+    it("compares pixels when the baseline has a pixel fingerprint", () => {
+      const red = { width: 1, height: 1, rgba: Uint8ClampedArray.from([255, 0, 0, 255]) };
+      const blue = { width: 1, height: 1, rgba: Uint8ClampedArray.from([0, 0, 255, 255]) };
+      assert.equal(isStaleClipboardFrame(red, clipboardImageSignature(red)), true);
+      assert.equal(isStaleClipboardFrame(blue, clipboardImageSignature(red)), false);
+    });
+
+    it("compares only dimensions when a large baseline was probed without pixels", () => {
+      // Baseline probing skips pixel reads above the OS write cap; the pasted
+      // frame always carries pixels and must not be fingerprinted differently.
+      const frame = { width: 2, height: 1, rgba: Uint8ClampedArray.from([1, 2, 3, 255, 4, 5, 6, 255]) };
+      assert.equal(isStaleClipboardFrame(frame, "2x1"), true);
+      assert.equal(isStaleClipboardFrame(frame, "1x2"), false);
+    });
+
     it("pasteboard changed since copy (another app copied) → not stale, import it", () => {
       assert.equal(isStaleClipboardFrame(external, "512x512"), false);
     });
