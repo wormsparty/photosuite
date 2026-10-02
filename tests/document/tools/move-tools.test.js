@@ -100,6 +100,37 @@ describe("document/tools/move-tools.js", () => {
     assert.deepEqual(offsets, [3, 4, 3, 4]);
   });
 
+  it("ignores malformed active extra-channel targets without moving or throwing", () => {
+    const tool = new MoveTool();
+    const rect = new Rect(1, 2, 3, 1);
+    const doc = {
+      activeChannels: [0, 0],
+      extraChannels: [{ rect }],
+      dirty: false,
+    };
+    tool.dragTargetKind = 4;
+
+    assert.doesNotThrow(() => tool.applyPointerDelta(doc, 4, -2));
+    assert.deepEqual(rect, new Rect(1, 2, 3, 1));
+    assert.equal(doc.dirty, false);
+  });
+
+  it("rejects malformed channel history during undo and redo", () => {
+    const tool = new MoveTool();
+    const rect = new Rect(1, 2, 3, 1);
+    const doc = { extraChannels: [{ rect }], dirty: false };
+    const historyData = {
+      actionKind: 4,
+      channelIndices: [-1],
+      moveDelta: { x: 3, y: 2 },
+    };
+
+    assert.doesNotThrow(() => tool.undo(historyData, doc));
+    assert.doesNotThrow(() => tool.redo(historyData, doc));
+    assert.deepEqual(rect, new Rect(1, 2, 3, 1));
+    assert.equal(doc.dirty, false);
+  });
+
   describe("alignment rejected by layer locks", () => {
     for (const lockBit of [2, 31]) {
       for (const alignMode of [0, 1, 2, 4, 5, 6]) {

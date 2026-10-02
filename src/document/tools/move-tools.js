@@ -64,6 +64,32 @@ const ALIGN_HISTORY_LABELS = [
   "align.options.equalGaps",
 ];
 
+/** Return active extra-channel indices only when they are a safe target set. */
+function getValidActiveChannelIndices(doc) {
+  if (!Array.isArray(doc.activeChannels)) return null;
+  const indices = doc.activeChannels.slice(0);
+  if (indices.length == 0) return indices;
+  if (!Array.isArray(doc.extraChannels)) return null;
+  if (indices.some((channelIdx, position) =>
+    !Number.isInteger(channelIdx)
+    || channelIdx < 0
+    || channelIdx >= doc.extraChannels.length
+    || indices.indexOf(channelIdx) != position
+  )) return null;
+  return indices;
+}
+
+function getValidChannelHistoryIndices(channelIndices, doc) {
+  if (!Array.isArray(channelIndices) || !Array.isArray(doc.extraChannels)) return null;
+  if (channelIndices.some((channelIdx, position) =>
+    !Number.isInteger(channelIdx)
+    || channelIdx < 0
+    || channelIdx >= doc.extraChannels.length
+    || channelIndices.indexOf(channelIdx) != position
+  )) return null;
+  return channelIndices;
+}
+
 
 function createDefaultMoveToolOptions() {
   return {
@@ -595,9 +621,11 @@ MoveTool.prototype.beginPointerGesture = function(doc, dispatcher, keyboard, app
       this.selectionRectAtDragStart = TransformToolBase.getSelectionRect(doc);
       return
     }
-    if (doc.activeChannels.length != 0) {
+    var activeChannelIndices = getValidActiveChannelIndices(doc);
+    if (activeChannelIndices == null) return;
+    if (activeChannelIndices.length != 0) {
       this.dragTargetKind = MOVE_TARGET.CHANNEL;
-      this.selectionRectAtDragStart = doc.extraChannels[doc.activeChannels[0]].rect.clone();
+      this.selectionRectAtDragStart = doc.extraChannels[activeChannelIndices[0]].rect.clone();
       this.isDragging = true;
       return
     }
@@ -645,9 +673,11 @@ MoveTool.prototype.beginPointerGesture = function(doc, dispatcher, keyboard, app
       dispatcher.dispatch(duplicateEvent)
     }
   }
-  if (doc.activeChannels.length != 0) {
+  var activeChannelIndices = getValidActiveChannelIndices(doc);
+  if (activeChannelIndices == null) return;
+  if (activeChannelIndices.length != 0) {
     this.dragTargetKind = MOVE_TARGET.CHANNEL;
-    this.selectionRectAtDragStart = doc.extraChannels[doc.activeChannels[0]].rect.clone();
+    this.selectionRectAtDragStart = doc.extraChannels[activeChannelIndices[0]].rect.clone();
     this.isDragging = true;
     return
   }
@@ -804,7 +834,9 @@ MoveTool.prototype.applyPointerDelta = function(doc, deltaX, deltaY, pointerDocP
       doc.stateChanged = doc.allowViewUpdate = true
     }
   } else if (this.dragTargetKind == MOVE_TARGET.CHANNEL) {
-    for (var channelIdx = 0; channelIdx < doc.activeChannels.length; channelIdx++) doc.extraChannels[doc.activeChannels[channelIdx]].rect.offset(deltaX, deltaY);
+    var activeChannelIndices = getValidActiveChannelIndices(doc);
+    if (activeChannelIndices == null) return;
+    for (var channelIdx = 0; channelIdx < activeChannelIndices.length; channelIdx++) doc.extraChannels[activeChannelIndices[channelIdx]].rect.offset(deltaX, deltaY);
     doc.dirty = true
   }
 };
@@ -872,10 +904,12 @@ MoveTool.prototype.finishPointerGesture = function(doc, pointerState, appData, l
     };
     doc.pushHistory(guideHistoryEntry)
   } else if (this.dragTargetKind == MOVE_TARGET.CHANNEL) {
+    var activeChannelIndices = getValidActiveChannelIndices(doc);
+    if (activeChannelIndices == null || activeChannelIndices.length == 0) return;
     var channelMoveEntry = new HistoryEntry("properties.move", this);
     channelMoveEntry.data = {
       actionKind: MOVE_TARGET.CHANNEL,
-      channelIndices: doc.activeChannels.slice(0),
+      channelIndices: activeChannelIndices,
       moveDelta: this.accumulatedDelta.clone()
     };
     doc.pushHistory(channelMoveEntry)
@@ -925,7 +959,9 @@ MoveTool.prototype.undo = function(historyData, doc) {
     doc.guides = JSON.parse(JSON.stringify(historyData.guidesBefore));
     doc.dirty = true
   } else if (historyData.actionKind == MOVE_TARGET.CHANNEL) {
-    for (var channelIdx = 0; channelIdx < historyData.channelIndices.length; channelIdx++) doc.extraChannels[historyData.channelIndices[channelIdx]].rect.offset(-historyData.moveDelta.x, -historyData.moveDelta.y);
+    var channelIndices = getValidChannelHistoryIndices(historyData.channelIndices, doc);
+    if (channelIndices == null) return;
+    for (var channelIdx = 0; channelIdx < channelIndices.length; channelIdx++) doc.extraChannels[channelIndices[channelIdx]].rect.offset(-historyData.moveDelta.x, -historyData.moveDelta.y);
     doc.dirty = true
   } else {
     var layer = doc.layers[historyData.layerIndex];
@@ -946,7 +982,9 @@ MoveTool.prototype.redo = function(historyData, doc) {
     doc.guides = JSON.parse(JSON.stringify(historyData.guidesAfter));
     doc.dirty = true
   } else if (historyData.actionKind == MOVE_TARGET.CHANNEL) {
-    for (var channelIdx = 0; channelIdx < historyData.channelIndices.length; channelIdx++) doc.extraChannels[historyData.channelIndices[channelIdx]].rect.offset(historyData.moveDelta.x, historyData.moveDelta.y);
+    var channelIndices = getValidChannelHistoryIndices(historyData.channelIndices, doc);
+    if (channelIndices == null) return;
+    for (var channelIdx = 0; channelIdx < channelIndices.length; channelIdx++) doc.extraChannels[channelIndices[channelIdx]].rect.offset(historyData.moveDelta.x, historyData.moveDelta.y);
     doc.dirty = true
   } else {
     var layer = doc.layers[historyData.layerIndex];
@@ -1045,4 +1083,3 @@ MoveTool.captureLayerEditFlags = function(doc, layerIndices) {
 // imported, so they are fully built by the time this runs.
 MoveTool.prototype = Object.create(ToolBase.prototype);
 installMoveToolPrototype();
-
