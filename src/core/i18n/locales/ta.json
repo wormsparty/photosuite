@@ -647,7 +647,15 @@
     "virtualKeys": "மெய்நிகர் விசைகள்",
     "reorderEffect": "விளைவை மேலே அல்லது கீழே நகர்த்து",
     "duplicateEffect": "விளைவை நகல் எடு",
-    "zoomWithScrollWheel": "ஸ்க்ரோல் வீல் மூலம் பெரிதாக்கம்"
+    "zoomWithScrollWheel": "ஸ்க்ரோல் வீல் மூலம் பெரிதாக்கம்",
+    "uiFontSize": {
+      "label": "UI எழுத்துரு அளவு",
+      "verySmall": "மிகச் சிறிது",
+      "small": "சிறிது",
+      "medium": "நடுத்தரம்",
+      "large": "பெரிது",
+      "veryLarge": "மிகப் பெரிது"
+    }
   },
   "filters": {
     "gallery": {

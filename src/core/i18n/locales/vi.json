@@ -647,7 +647,15 @@
     "virtualKeys": "Phím ảo",
     "reorderEffect": "Di chuyển hiệu ứng lên hoặc xuống",
     "duplicateEffect": "Nhân đôi hiệu ứng",
-    "zoomWithScrollWheel": "Thu phóng bằng con lăn chuột"
+    "zoomWithScrollWheel": "Thu phóng bằng con lăn chuột",
+    "uiFontSize": {
+      "label": "Kích thước phông chữ giao diện",
+      "verySmall": "Rất nhỏ",
+      "small": "Nhỏ",
+      "medium": "Trung bình",
+      "large": "Lớn",
+      "veryLarge": "Rất lớn"
+    }
   },
   "filters": {
     "gallery": {

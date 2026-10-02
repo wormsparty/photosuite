@@ -647,7 +647,15 @@
     "virtualKeys": "Виртуелни тастери",
     "reorderEffect": "Помери ефекат горе или доле",
     "duplicateEffect": "Дуплирај ефекат",
-    "zoomWithScrollWheel": "Зумирање точкићем миша"
+    "zoomWithScrollWheel": "Зумирање точкићем миша",
+    "uiFontSize": {
+      "label": "Величина фонта интерфејса",
+      "verySmall": "Веома мали",
+      "small": "Мали",
+      "medium": "Средњи",
+      "large": "Велики",
+      "veryLarge": "Веома велики"
+    }
   },
   "filters": {
     "gallery": {

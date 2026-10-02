@@ -15,6 +15,7 @@ import { addClass, appendBreak, appendHorizontalRule, escapeHtml, makeElement, r
 import { AppEvent } from "../../core/event-bus.js";
 import { UNIT_NAMES } from "../../engine/compositing/geometry.js";
 import {
+  UI_FONT_SIZE_LABEL_KEYS,
   createDefaultEditorPrefs,
   normalizeEditorPrefs,
   readPrefValue,
@@ -78,7 +79,18 @@ const PREFERENCE_SECTIONS = [
   {
     id: "interface",
     labelKey: "dialogs.preferenceSections.interface",
-    groups: [{ rows: [{ control: "theme" }, { control: "language" }] }],
+    groups: [
+      {
+        rows: [
+          { control: "theme" },
+          { control: "language" },
+          {
+            pref: "uiFontSize",
+            widget: dropdown("properties.uiFontSize.label", UI_FONT_SIZE_LABEL_KEYS.slice()),
+          },
+        ],
+      },
+    ],
   },
   {
     id: "tools",

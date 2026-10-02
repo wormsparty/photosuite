@@ -647,7 +647,15 @@
     "virtualKeys": "가상 키",
     "reorderEffect": "효과 위아래로 이동",
     "duplicateEffect": "효과 복제",
-    "zoomWithScrollWheel": "스크롤 휠로 확대/축소"
+    "zoomWithScrollWheel": "스크롤 휠로 확대/축소",
+    "uiFontSize": {
+      "label": "UI 글꼴 크기",
+      "verySmall": "매우 작게",
+      "small": "작게",
+      "medium": "중간",
+      "large": "크게",
+      "veryLarge": "매우 크게"
+    }
   },
   "filters": {
     "gallery": {

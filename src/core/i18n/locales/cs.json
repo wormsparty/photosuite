@@ -647,7 +647,15 @@
     "virtualKeys": "Virtuální klávesy",
     "reorderEffect": "Přesunout efekt nahoru nebo dolů",
     "duplicateEffect": "Duplikovat efekt",
-    "zoomWithScrollWheel": "Přibližování kolečkem myši"
+    "zoomWithScrollWheel": "Přibližování kolečkem myši",
+    "uiFontSize": {
+      "label": "Velikost písma rozhraní",
+      "verySmall": "Velmi malý",
+      "small": "Malý",
+      "medium": "Střední",
+      "large": "Velký",
+      "veryLarge": "Velmi velký"
+    }
   },
   "filters": {
     "gallery": {

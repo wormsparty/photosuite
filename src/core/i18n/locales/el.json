@@ -647,7 +647,15 @@
     "virtualKeys": "Εικονικά πλήκτρα",
     "reorderEffect": "Μετακίνηση εφέ πάνω ή κάτω",
     "duplicateEffect": "Δημιουργία αντιγράφου εφέ",
-    "zoomWithScrollWheel": "Ζουμ με τη ροδέλα κύλισης"
+    "zoomWithScrollWheel": "Ζουμ με τη ροδέλα κύλισης",
+    "uiFontSize": {
+      "label": "Μέγεθος γραμματοσειράς διεπαφής",
+      "verySmall": "Πολύ μικρό",
+      "small": "Μικρό",
+      "medium": "Μεσαίο",
+      "large": "Μεγάλο",
+      "veryLarge": "Πολύ μεγάλο"
+    }
   },
   "filters": {
     "gallery": {

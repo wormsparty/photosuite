@@ -45,6 +45,7 @@ describe("contract: app-settings ↔ editor prefs", () => {
       slices: true,
       gpuAcceleration: true,
       zoomWithScrollWheel: true,
+      uiFontSize: 3,
     };
 
     assert.deepEqual(snapshotEditorParamsFromPrefs(prefs), {
@@ -60,6 +61,7 @@ describe("contract: app-settings ↔ editor prefs", () => {
       slices: true,
       gpu: true,
       zws: true,
+      uifs: 3,
     });
   });
 

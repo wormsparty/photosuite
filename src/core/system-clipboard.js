@@ -95,7 +95,15 @@ export function writeClipboardRgba(rgba, width, height) {
   }
 
   if (width <= 0 || height <= 0) return Promise.resolve();
-  if (width * height > OS_CLIPBOARD_WRITE_MAX_PIXELS) return Promise.resolve();
+  if (width * height > OS_CLIPBOARD_WRITE_MAX_PIXELS) {
+    // Nothing reaches the pasteboard, so say why rather than leaving the user
+    // to discover it by pasting into another application and getting nothing.
+    console.warn(
+      "clipboard write skipped: " + width + "x" + height + " exceeds the " +
+      OS_CLIPBOARD_WRITE_MAX_PIXELS + " pixel limit for the system clipboard"
+    );
+    return Promise.resolve();
+  }
 
   const pixels = rgba instanceof Uint8ClampedArray ? rgba : new Uint8ClampedArray(rgba);
   if (pixels.length !== width * height * 4) return Promise.resolve();
@@ -268,6 +276,37 @@ function importRgbaClipboardFrame(
   return false;
 }
 
+/** Extension for a pasted image, from the type the clipboard declared. */
+function clipboardImageExtension(mimeType) {
+  const subtype = String(mimeType || "").split("/")[1];
+  if (!subtype) return "png";
+  if (subtype === "jpeg") return "jpg";
+  if (subtype === "svg+xml") return "svg";
+  return subtype.replace(/[^a-z0-9]/gi, "") || "png";
+}
+
+/**
+ * A pasted image as a named `File`, because the open path takes the format from
+ * the name and a clipboard file often has none.
+ *
+ * The name has to be given at construction: `File.name` is a getter, so
+ * assigning to it throws in a module's strict mode. That only ever fired on
+ * Windows, the one platform whose webview puts the image on the paste event's
+ * DataTransfer at all — so on Windows every paste threw here and pasted
+ * nothing, while macOS and Linux took a different branch entirely and were
+ * fine.
+ *
+ * @param {File} file
+ * @returns {File}
+ */
+export function nameClipboardImageFile(file) {
+  if (file.name) return file;
+  return new File([file], "image." + clipboardImageExtension(file.type), {
+    type: file.type,
+    lastModified: file.lastModified,
+  });
+}
+
 export function dataTransferHasImage(dataTransfer) {
   if (!dataTransfer || !dataTransfer.items) return false;
   for (let i = 0; i < dataTransfer.items.length; i++) {
@@ -312,10 +351,7 @@ export function applyDataTransferToController(
       const file = item.getAsFile();
       if (file && controller.appData) {
         if (controller.fileLoader) {
-          // File.name is read-only in browsers. Clipboard images commonly have
-          // a name already; give unnamed blobs one for the file loader.
-          const importFile = file.name ? file : new File([file], "image.png", { type: file.type || "image/png" });
-          controller.fileLoader.loadLocalFiles([importFile], imageCallback);
+          controller.fileLoader.loadLocalFiles([nameClipboardImageFile(file)], imageCallback);
           imageHandled = true;
           handled = true;
         }

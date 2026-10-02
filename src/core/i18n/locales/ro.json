@@ -647,7 +647,15 @@
     "virtualKeys": "Taste virtuale",
     "reorderEffect": "Mută efectul în sus sau în jos",
     "duplicateEffect": "Duplică efectul",
-    "zoomWithScrollWheel": "Zoom cu rotița de derulare"
+    "zoomWithScrollWheel": "Zoom cu rotița de derulare",
+    "uiFontSize": {
+      "label": "Mărime font interfață",
+      "verySmall": "Foarte mic",
+      "small": "Mic",
+      "medium": "Mediu",
+      "large": "Mare",
+      "veryLarge": "Foarte mare"
+    }
   },
   "filters": {
     "gallery": {

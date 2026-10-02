@@ -647,7 +647,15 @@
     "virtualKeys": "Klawisze wirtualne",
     "reorderEffect": "Przenieś efekt w górę lub w dół",
     "duplicateEffect": "Duplikuj efekt",
-    "zoomWithScrollWheel": "Powiększanie kółkiem myszy"
+    "zoomWithScrollWheel": "Powiększanie kółkiem myszy",
+    "uiFontSize": {
+      "label": "Rozmiar czcionki interfejsu",
+      "verySmall": "Bardzo mały",
+      "small": "Mały",
+      "medium": "Średni",
+      "large": "Duży",
+      "veryLarge": "Bardzo duży"
+    }
   },
   "filters": {
     "gallery": {

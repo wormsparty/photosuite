@@ -647,7 +647,15 @@
     "virtualKeys": "仮想キー",
     "reorderEffect": "効果を上下に移動",
     "duplicateEffect": "効果を複製",
-    "zoomWithScrollWheel": "スクロールホイールでズーム"
+    "zoomWithScrollWheel": "スクロールホイールでズーム",
+    "uiFontSize": {
+      "label": "UIフォントサイズ",
+      "verySmall": "極小",
+      "small": "小",
+      "medium": "中",
+      "large": "大",
+      "veryLarge": "極大"
+    }
   },
   "filters": {
     "gallery": {

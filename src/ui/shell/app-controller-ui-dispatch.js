@@ -44,6 +44,7 @@ import { persistAppSettings } from "../../core/app-settings.js";
 import { BrushPresetUtil } from "../../features/brush/brush-presets.js";
 import { EventType, UiCommand } from "../../core/event-bus.js";
 import { nativeWriteFile, openExternalUrl, pickSavePath } from "../../core/tauri-host.js";
+import { uiFontSizePx } from "../../core/editor-preferences.js";
 import { confirmUser, promptConfirmUser, promptUnsavedCloseForClose, showToast } from "../../core/user-prompts.js";
 import { AppEvent } from "../../core/event-bus.js";
 import { allocBuffer, fillBuffer, rgbaToGrayChannel } from "../../engine/compositing/buffer-utils.js";
@@ -493,6 +494,17 @@ function handleUiDispatch(controller, dispatchEvent) {
  *
  * @param {Record<string, unknown>} prefs
  */
+/**
+ * Put the chosen UI text size on the document element, which every `em` in the
+ * stylesheet is measured against.
+ *
+ * @param {Record<string, unknown>} prefs
+ */
+export function applyUiFontSizePreference(prefs) {
+  if (typeof document === "undefined" || !document.documentElement) return;
+  document.documentElement.style.setProperty("--ui-font-size", uiFontSizePx(prefs) + "px");
+}
+
 export function applyGpuAccelerationPreference(prefs) {
   const wantsGpu = prefs == null || prefs.gpuAcceleration !== false;
   LayerSystem.webglEnabled = wantsGpu && LayerSystem.glContextAvailable === true;
@@ -1163,6 +1175,10 @@ function applyPresetPopupSideEffects(controller, doc, appData, popupType, data) 
   if (popupType == PopupTypes.PREFERENCES) {
     appData.prefs = data.prefsSnapshot;
     applyGpuAccelerationPreference(appData.prefs);
+    applyUiFontSizePreference(appData.prefs);
+    // Chrome metrics are read back in JS at layout time, so the new text size
+    // only takes effect once the shell measures itself again.
+    controller.buildUI();
     controller.onResize();
     if (controller.openDocs.length > 0) controller.getCurrentDoc().markDirty();
     persistAppSettings(controller).catch(function(err) {

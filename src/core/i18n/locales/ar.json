@@ -647,7 +647,15 @@
     "virtualKeys": "مفاتيح افتراضية",
     "reorderEffect": "نقل التأثير لأعلى أو لأسفل",
     "duplicateEffect": "تكرار التأثير",
-    "zoomWithScrollWheel": "التكبير باستخدام عجلة التمرير"
+    "zoomWithScrollWheel": "التكبير باستخدام عجلة التمرير",
+    "uiFontSize": {
+      "label": "حجم خط واجهة المستخدم",
+      "verySmall": "صغير جداً",
+      "small": "صغير",
+      "medium": "متوسط",
+      "large": "كبير",
+      "veryLarge": "كبير جداً"
+    }
   },
   "filters": {
     "gallery": {

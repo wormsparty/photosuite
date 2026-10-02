@@ -647,7 +647,15 @@
     "virtualKeys": "Virtuaalinäppäimet",
     "reorderEffect": "Siirrä tehostetta ylös tai alas",
     "duplicateEffect": "Monista tehoste",
-    "zoomWithScrollWheel": "Zoomaus vierityspyörällä"
+    "zoomWithScrollWheel": "Zoomaus vierityspyörällä",
+    "uiFontSize": {
+      "label": "Käyttöliittymän fonttikoko",
+      "verySmall": "Erittäin pieni",
+      "small": "Pieni",
+      "medium": "Keskikokoinen",
+      "large": "Suuri",
+      "veryLarge": "Erittäin suuri"
+    }
   },
   "filters": {
     "gallery": {

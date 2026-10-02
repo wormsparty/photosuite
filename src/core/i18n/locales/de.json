@@ -647,7 +647,15 @@
     "virtualKeys": "Virtuelle Tasten",
     "reorderEffect": "Effekt nach oben oder unten verschieben",
     "duplicateEffect": "Effekt duplizieren",
-    "zoomWithScrollWheel": "Zoom mit Mausrad"
+    "zoomWithScrollWheel": "Zoom mit Mausrad",
+    "uiFontSize": {
+      "label": "UI-Schriftgröße",
+      "verySmall": "Sehr klein",
+      "small": "Klein",
+      "medium": "Mittel",
+      "large": "Groß",
+      "veryLarge": "Sehr groß"
+    }
   },
   "filters": {
     "gallery": {

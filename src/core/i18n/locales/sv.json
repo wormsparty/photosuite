@@ -647,7 +647,15 @@
     "virtualKeys": "Virtuella tangenter",
     "reorderEffect": "Flytta effekt upp eller ner",
     "duplicateEffect": "Duplicera effekt",
-    "zoomWithScrollWheel": "Zoom med rullhjul"
+    "zoomWithScrollWheel": "Zoom med rullhjul",
+    "uiFontSize": {
+      "label": "UI-teckenstorlek",
+      "verySmall": "Mycket liten",
+      "small": "Liten",
+      "medium": "Medium",
+      "large": "Stor",
+      "veryLarge": "Mycket stor"
+    }
   },
   "filters": {
     "gallery": {

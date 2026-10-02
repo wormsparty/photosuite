@@ -647,7 +647,15 @@
     "virtualKeys": "Tecles virtuals",
     "reorderEffect": "Mou l’efecte amunt o avall",
     "duplicateEffect": "Duplica l’efecte",
-    "zoomWithScrollWheel": "Zoom amb la roda de desplaçament"
+    "zoomWithScrollWheel": "Zoom amb la roda de desplaçament",
+    "uiFontSize": {
+      "label": "Mida de lletra de la interfície",
+      "verySmall": "Molt petit",
+      "small": "Petit",
+      "medium": "Mitjà",
+      "large": "Gran",
+      "veryLarge": "Molt gran"
+    }
   },
   "filters": {
     "gallery": {

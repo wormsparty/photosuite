@@ -28,6 +28,7 @@ let resolvePlaceIntoActiveDocIndex;
 let lookupDialogScriptMethod;
 let confirmDiscardUnsavedDocuments;
 let handleConfirmPersistResource;
+let applyUiFontSizePreference;
 
 before(async () => {
   ({
@@ -40,7 +41,8 @@ before(async () => {
     resolvePlaceIntoActiveDocIndex,
     lookupDialogScriptMethod,
     confirmDiscardUnsavedDocuments,
-    handleConfirmPersistResource
+    handleConfirmPersistResource,
+    applyUiFontSizePreference
   } = await import("../../../src/ui/shell/app-controller-ui-dispatch.js"));
 });
 
@@ -258,6 +260,39 @@ describe("ui/shell/app-controller-ui-dispatch.js", () => {
         Object.keys(controller.appData.startupResourceStore.storedFiles),
         ["styles.asl", "brushes.abr"],
       );
+    });
+  });
+
+  // Every `em` in the stylesheet is measured against this one property, so
+  // writing it is the whole mechanism behind the size preference.
+  describe("applyUiFontSizePreference", () => {
+    function captureRootStyle() {
+      const written = {};
+      const previous = globalThis.document.documentElement;
+      globalThis.document.documentElement = {
+        style: { setProperty: (name, value) => { written[name] = value; } },
+      };
+      return { written, restore: () => { globalThis.document.documentElement = previous; } };
+    }
+
+    it("writes the chosen step as a pixel size", () => {
+      const root = captureRootStyle();
+      try {
+        applyUiFontSizePreference({ uiFontSize: 4 });
+        assert.equal(root.written["--ui-font-size"], "17px");
+      } finally {
+        root.restore();
+      }
+    });
+
+    it("falls back to the stylesheet's own size when the preference is unset", () => {
+      const root = captureRootStyle();
+      try {
+        applyUiFontSizePreference({});
+        assert.equal(root.written["--ui-font-size"], "13px");
+      } finally {
+        root.restore();
+      }
     });
   });
 

@@ -647,7 +647,15 @@
     "virtualKeys": "Virtualūs klavišai",
     "reorderEffect": "Perkelti efektą aukštyn arba žemyn",
     "duplicateEffect": "Dubliuoti efektą",
-    "zoomWithScrollWheel": "Mastelio keitimas slinkties ratuku"
+    "zoomWithScrollWheel": "Mastelio keitimas slinkties ratuku",
+    "uiFontSize": {
+      "label": "Sąsajos šrifto dydis",
+      "verySmall": "Labai mažas",
+      "small": "Mažas",
+      "medium": "Vidutinis",
+      "large": "Didelis",
+      "veryLarge": "Labai didelis"
+    }
   },
   "filters": {
     "gallery": {

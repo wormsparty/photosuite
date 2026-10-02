@@ -647,7 +647,15 @@
     "virtualKeys": "ปุ่มเสมือน",
     "reorderEffect": "ย้ายเอฟเฟกต์ขึ้นหรือลง",
     "duplicateEffect": "ทำสำเนาเอฟเฟกต์",
-    "zoomWithScrollWheel": "ซูมด้วยล้อเลื่อน"
+    "zoomWithScrollWheel": "ซูมด้วยล้อเลื่อน",
+    "uiFontSize": {
+      "label": "ขนาดแบบอักษร UI",
+      "verySmall": "เล็กมาก",
+      "small": "เล็ก",
+      "medium": "ปานกลาง",
+      "large": "ใหญ่",
+      "veryLarge": "ใหญ่มาก"
+    }
   },
   "filters": {
     "gallery": {

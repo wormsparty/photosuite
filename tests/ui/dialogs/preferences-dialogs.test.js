@@ -116,8 +116,9 @@ describe("ui/dialogs/preferences-dialogs.js", () => {
       assert.equal(sectionOf("AppWindow"), "units");
       assert.equal(sectionOf("guides"), "guides");
       assert.equal(sectionOf("gridType"), "guides");
-      const interfaceRows = sectionRows(PREFERENCE_SECTIONS[1]).map((row) => row.control);
-      assert.deepEqual(interfaceRows, ["theme", "language"]);
+      assert.equal(sectionOf("uiFontSize"), "interface");
+      const interfaceRows = sectionRows(PREFERENCE_SECTIONS[1]).map((row) => row.control || row.pref);
+      assert.deepEqual(interfaceRows, ["theme", "language", "uiFontSize"]);
     });
 
     it("gives every group rows, and every label a key to translate", () => {

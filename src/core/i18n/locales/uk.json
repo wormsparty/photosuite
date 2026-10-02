@@ -647,7 +647,15 @@
     "virtualKeys": "Віртуальні клавіші",
     "reorderEffect": "Перемістити ефект вгору або вниз",
     "duplicateEffect": "Дублювати ефект",
-    "zoomWithScrollWheel": "Масштабування колесом миші"
+    "zoomWithScrollWheel": "Масштабування колесом миші",
+    "uiFontSize": {
+      "label": "Розмір шрифту інтерфейсу",
+      "verySmall": "Дуже малий",
+      "small": "Малий",
+      "medium": "Середній",
+      "large": "Великий",
+      "veryLarge": "Дуже великий"
+    }
   },
   "filters": {
     "gallery": {

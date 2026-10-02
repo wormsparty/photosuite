@@ -647,7 +647,15 @@
     "virtualKeys": "Виртуални клавиши",
     "reorderEffect": "Премести ефекта нагоре или надолу",
     "duplicateEffect": "Дублирай ефект",
-    "zoomWithScrollWheel": "Мащабиране с колелото на мишката"
+    "zoomWithScrollWheel": "Мащабиране с колелото на мишката",
+    "uiFontSize": {
+      "label": "Размер на шрифта на интерфейса",
+      "verySmall": "Много малък",
+      "small": "Малък",
+      "medium": "Среден",
+      "large": "Голям",
+      "veryLarge": "Много голям"
+    }
   },
   "filters": {
     "gallery": {

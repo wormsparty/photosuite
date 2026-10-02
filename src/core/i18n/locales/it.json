@@ -647,7 +647,15 @@
     "virtualKeys": "Tasti virtuali",
     "reorderEffect": "Sposta effetto su o giù",
     "duplicateEffect": "Duplica effetto",
-    "zoomWithScrollWheel": "Zoom con la rotellina di scorrimento"
+    "zoomWithScrollWheel": "Zoom con la rotellina di scorrimento",
+    "uiFontSize": {
+      "label": "Dimensione font interfaccia",
+      "verySmall": "Molto piccolo",
+      "small": "Piccolo",
+      "medium": "Medio",
+      "large": "Grande",
+      "veryLarge": "Molto grande"
+    }
   },
   "filters": {
     "gallery": {

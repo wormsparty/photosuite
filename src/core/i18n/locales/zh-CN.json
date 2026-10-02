@@ -647,7 +647,15 @@
     "virtualKeys": "虚拟按键",
     "reorderEffect": "上下移动效果",
     "duplicateEffect": "复制效果",
-    "zoomWithScrollWheel": "使用滚轮缩放"
+    "zoomWithScrollWheel": "使用滚轮缩放",
+    "uiFontSize": {
+      "label": "UI字体大小",
+      "verySmall": "极小",
+      "small": "小",
+      "medium": "中",
+      "large": "大",
+      "veryLarge": "极大"
+    }
   },
   "filters": {
     "gallery": {

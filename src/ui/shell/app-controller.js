@@ -66,7 +66,11 @@ import { MenuBar } from "../menu/menu-bar.js";
 import { createToolRegistry, initToolRegistryMap } from "./app-controller-tool-registry.js";
 import { applyLaunchHandlers } from "./app-controller-launch.js";
 import { applyClipboardHandlers } from "./app-controller-clipboard.js";
-import { applyUiDispatchHandlers, applyGpuAccelerationPreference } from "./app-controller-ui-dispatch.js";
+import {
+  applyUiDispatchHandlers,
+  applyGpuAccelerationPreference,
+  applyUiFontSizePreference
+} from "./app-controller-ui-dispatch.js";
 import { applyToolHandlers } from "./app-controller-tools.js";
 import { applyKeyboardHandlers } from "./app-controller-keyboard.js";
 import { applyStoredSettingsOnStartup } from "../../core/app-settings.js";
@@ -246,6 +250,7 @@ AppController.prototype.runDeferredStartup = function() {
   const appController = this;
   applyStoredSettingsOnStartup(appController).then(function() {
     applyGpuAccelerationPreference(appController.appData.prefs);
+    applyUiFontSizePreference(appController.appData.prefs);
     return loadRecentFilesFromStore();
   }).catch(function(err) {
     // Settings and recent files are conveniences; a failure there must not cost

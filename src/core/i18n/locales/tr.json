@@ -647,7 +647,15 @@
     "virtualKeys": "Sanal tuşlar",
     "reorderEffect": "Efekti yukarı veya aşağı taşı",
     "duplicateEffect": "Efekti çoğalt",
-    "zoomWithScrollWheel": "Kaydırma tekerleğiyle yakınlaştırma"
+    "zoomWithScrollWheel": "Kaydırma tekerleğiyle yakınlaştırma",
+    "uiFontSize": {
+      "label": "Arayüz yazı tipi boyutu",
+      "verySmall": "Çok küçük",
+      "small": "Küçük",
+      "medium": "Orta",
+      "large": "Büyük",
+      "veryLarge": "Çok büyük"
+    }
   },
   "filters": {
     "gallery": {

@@ -647,7 +647,15 @@
     "virtualKeys": "מקשים וירטואליים",
     "reorderEffect": "הזזת אפקט למעלה או למטה",
     "duplicateEffect": "שכפול אפקט",
-    "zoomWithScrollWheel": "זום באמצעות גלגלת הגלילה"
+    "zoomWithScrollWheel": "זום באמצעות גלגלת הגלילה",
+    "uiFontSize": {
+      "label": "גודל גופן הממשק",
+      "verySmall": "קטן מאוד",
+      "small": "קטן",
+      "medium": "בינוני",
+      "large": "גדול",
+      "veryLarge": "גדול מאוד"
+    }
   },
   "filters": {
     "gallery": {

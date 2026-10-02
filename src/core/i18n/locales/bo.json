@@ -647,7 +647,15 @@
     "virtualKeys": "རྟོགས་བཟོས་མཐེབ།",
     "reorderEffect": "ནུས་པ་ཡར་མར་སྤོ།",
     "duplicateEffect": "ནུས་པ་འདྲ་བཤུས།",
-    "zoomWithScrollWheel": "འཁོར་ལོའི་སྒོར་མོས་མཐོང་ཆ་སྤོར་བ།"
+    "zoomWithScrollWheel": "འཁོར་ལོའི་སྒོར་མོས་མཐོང་ཆ་སྤོར་བ།",
+    "uiFontSize": {
+      "label": "མཐོང་ངོས་ཡིག་གཟུགས་ཆེ་ཆུང་།",
+      "verySmall": "ཧ་ཅང་ཆུང་བ།",
+      "small": "ཆུང་བ།",
+      "medium": "འབྲིང་བ།",
+      "large": "ཆེ་བ།",
+      "veryLarge": "ཧ་ཅང་ཆེ་བ།"
+    }
   },
   "filters": {
     "gallery": {

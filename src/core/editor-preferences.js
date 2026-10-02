@@ -48,7 +48,43 @@ export const EDITOR_PREFERENCES = Object.freeze([
   { key: "slices", storeKey: "slices", defaultValue: true },
   { key: "gpuAcceleration", storeKey: "gpu", defaultValue: true },
   { key: "zoomWithScrollWheel", storeKey: "zws", defaultValue: false },
+  {
+    key: "uiFontSize",
+    storeKey: "uifs",
+    // Index into UI_FONT_SIZE_STEPS; the middle step is the size the
+    // stylesheet is drawn at.
+    defaultValue: 2,
+    normalize: function (value) {
+      const step = Math.round(value);
+      if (!(step >= 0)) return 2;
+      return Math.min(UI_FONT_SIZE_STEPS.length - 1, step);
+    },
+  },
 ]);
+
+/**
+ * UI text sizes the Interface preference offers, smallest first, in pixels.
+ *
+ * The chrome is dimensioned in `em`, so this is the one number the whole
+ * interface scales from — which is the point: on a high-DPI display the default
+ * is legible but small, and there was no way to ask for more.
+ */
+export const UI_FONT_SIZE_STEPS = Object.freeze([11, 12, 13, 15, 17]);
+
+/** Labels for the steps, in the same order. */
+export const UI_FONT_SIZE_LABEL_KEYS = Object.freeze([
+  "properties.uiFontSize.verySmall",
+  "properties.uiFontSize.small",
+  "properties.uiFontSize.medium",
+  "properties.uiFontSize.large",
+  "properties.uiFontSize.veryLarge",
+]);
+
+/** Pixel size for a stored step, falling back to the stylesheet's own size. */
+export function uiFontSizePx(prefs) {
+  const step = readPrefValue(prefs, "uiFontSize");
+  return UI_FONT_SIZE_STEPS[step] == null ? UI_FONT_SIZE_STEPS[2] : UI_FONT_SIZE_STEPS[step];
+}
 
 /** @type {Readonly<Record<string, EditorPreference>>} */
 export const EDITOR_PREFERENCES_BY_KEY = Object.freeze(

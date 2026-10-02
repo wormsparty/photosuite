@@ -647,7 +647,15 @@
     "virtualKeys": "Touches virtuelles",
     "reorderEffect": "Déplacer l’effet vers le haut ou le bas",
     "duplicateEffect": "Dupliquer l’effet",
-    "zoomWithScrollWheel": "Zoom avec la molette de défilement"
+    "zoomWithScrollWheel": "Zoom avec la molette de défilement",
+    "uiFontSize": {
+      "label": "Taille de police de l'interface",
+      "verySmall": "Très petit",
+      "small": "Petit",
+      "medium": "Moyen",
+      "large": "Grand",
+      "veryLarge": "Très grand"
+    }
   },
   "filters": {
     "gallery": {

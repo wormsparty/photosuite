@@ -647,7 +647,15 @@
     "virtualKeys": "Tastet virtuale",
     "reorderEffect": "Lëviz efektin lart ose poshtë",
     "duplicateEffect": "Dubloni efektin",
-    "zoomWithScrollWheel": "Zmadhimi me rrotën e lëvizjes"
+    "zoomWithScrollWheel": "Zmadhimi me rrotën e lëvizjes",
+    "uiFontSize": {
+      "label": "Madhësia e shkrimit të ndërfaqes",
+      "verySmall": "Shumë e vogël",
+      "small": "E vogël",
+      "medium": "E mesme",
+      "large": "E madhe",
+      "veryLarge": "Shumë e madhe"
+    }
   },
   "filters": {
     "gallery": {

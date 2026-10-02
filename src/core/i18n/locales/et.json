@@ -647,7 +647,15 @@
     "virtualKeys": "Virtuaalklahvid",
     "reorderEffect": "Teisalda efekt üles või alla",
     "duplicateEffect": "Dubleeri efekt",
-    "zoomWithScrollWheel": "Suumimine hiirerattaga"
+    "zoomWithScrollWheel": "Suumimine hiirerattaga",
+    "uiFontSize": {
+      "label": "Kasutajaliidese fondi suurus",
+      "verySmall": "Väga väike",
+      "small": "Väike",
+      "medium": "Keskmine",
+      "large": "Suur",
+      "veryLarge": "Väga suur"
+    }
   },
   "filters": {
     "gallery": {

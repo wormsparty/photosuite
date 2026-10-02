@@ -647,7 +647,15 @@
     "virtualKeys": "Virtuelle taster",
     "reorderEffect": "Flytt effekt opp eller ned",
     "duplicateEffect": "Dupliser effekt",
-    "zoomWithScrollWheel": "Zoom med rullehjul"
+    "zoomWithScrollWheel": "Zoom med rullehjul",
+    "uiFontSize": {
+      "label": "UI-skriftstørrelse",
+      "verySmall": "Veldig liten",
+      "small": "Liten",
+      "medium": "Medium",
+      "large": "Stor",
+      "veryLarge": "Veldig stor"
+    }
   },
   "filters": {
     "gallery": {

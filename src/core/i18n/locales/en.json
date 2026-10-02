@@ -607,6 +607,14 @@
     "rulerUnits": "Ruler Units",
     "gpuAcceleration": "GPU acceleration",
     "zoomWithScrollWheel": "Zoom with Scroll Wheel",
+    "uiFontSize": {
+      "label": "UI font size",
+      "verySmall": "Very Small",
+      "small": "Small",
+      "medium": "Medium",
+      "large": "Large",
+      "veryLarge": "Very Large"
+    },
     "collapsePanels": "Collapse",
     "expandPanels": "Expand",
     "panelMenu": "Panel menu",

@@ -647,7 +647,15 @@
     "virtualKeys": "Virtuele toetsen",
     "reorderEffect": "Effect omhoog of omlaag verplaatsen",
     "duplicateEffect": "Effect dupliceren",
-    "zoomWithScrollWheel": "Zoomen met scrollwiel"
+    "zoomWithScrollWheel": "Zoomen met scrollwiel",
+    "uiFontSize": {
+      "label": "UI-lettergrootte",
+      "verySmall": "Zeer klein",
+      "small": "Klein",
+      "medium": "Middelgroot",
+      "large": "Groot",
+      "veryLarge": "Zeer groot"
+    }
   },
   "filters": {
     "gallery": {

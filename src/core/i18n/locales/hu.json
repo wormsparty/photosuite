@@ -647,7 +647,15 @@
     "virtualKeys": "Virtuális billentyűk",
     "reorderEffect": "Effekt mozgatása fel vagy le",
     "duplicateEffect": "Effekt másolása",
-    "zoomWithScrollWheel": "Nagyítás görgővel"
+    "zoomWithScrollWheel": "Nagyítás görgővel",
+    "uiFontSize": {
+      "label": "Felület betűmérete",
+      "verySmall": "Nagyon kicsi",
+      "small": "Kicsi",
+      "medium": "Közepes",
+      "large": "Nagy",
+      "veryLarge": "Nagyon nagy"
+    }
   },
   "filters": {
     "gallery": {

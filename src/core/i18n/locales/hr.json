@@ -647,7 +647,15 @@
     "virtualKeys": "Virtualne tipke",
     "reorderEffect": "Pomakni efekt gore ili dolje",
     "duplicateEffect": "Dupliciraj efekt",
-    "zoomWithScrollWheel": "Zumiranje kotačićem miša"
+    "zoomWithScrollWheel": "Zumiranje kotačićem miša",
+    "uiFontSize": {
+      "label": "Veličina fonta sučelja",
+      "verySmall": "Vrlo mali",
+      "small": "Mali",
+      "medium": "Srednji",
+      "large": "Veliki",
+      "veryLarge": "Vrlo veliki"
+    }
   },
   "filters": {
     "gallery": {

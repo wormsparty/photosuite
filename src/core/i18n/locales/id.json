@@ -647,7 +647,15 @@
     "virtualKeys": "Tombol virtual",
     "reorderEffect": "Pindahkan efek naik atau turun",
     "duplicateEffect": "Duplikat efek",
-    "zoomWithScrollWheel": "Perbesar dengan roda gulir"
+    "zoomWithScrollWheel": "Perbesar dengan roda gulir",
+    "uiFontSize": {
+      "label": "Ukuran font antarmuka",
+      "verySmall": "Sangat kecil",
+      "small": "Kecil",
+      "medium": "Sedang",
+      "large": "Besar",
+      "veryLarge": "Sangat besar"
+    }
   },
   "filters": {
     "gallery": {

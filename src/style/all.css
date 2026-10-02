@@ -45,8 +45,12 @@
 	--w-toolstrip: 35px;
 	/* Mirrored by BaseDialog.CHROME_HEADER_HEIGHT. */
 	--h-dialog-header: 34px;
-	/* Shared height for inputs, selects and push buttons so a form row aligns. */
-	--h-control: 24px;
+	/* Base UI text size. Preferences > Interface > UI font size writes this on
+	   the document element; everything sized in `em` follows from it. */
+	--ui-font-size: 13px;
+	/* Shared height for inputs, selects and push buttons so a form row aligns.
+	   Tied to the text it holds, or larger text would outgrow its field. */
+	--h-control: calc(var(--ui-font-size) * 1.85);
 
 	--shadow-popover: 0 6px 20px rgba(0, 0, 0, 0.28), 0 1px 3px rgba(0, 0, 0, 0.22);
 	--shadow-window: 0 18px 48px rgba(0, 0, 0, 0.38), 0 2px 8px rgba(0, 0, 0, 0.22);
@@ -90,7 +94,7 @@ body, button, input, textarea, select {
 }
 
 body, input, select, button {
-	font-size: 13px;
+	font-size: var(--ui-font-size);
 }
 
 body, button {

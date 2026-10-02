@@ -647,7 +647,15 @@
     "virtualKeys": "Navidezne tipke",
     "reorderEffect": "Premakni učinek navzgor ali navzdol",
     "duplicateEffect": "Podvoji učinek",
-    "zoomWithScrollWheel": "Povečava s kolescem miške"
+    "zoomWithScrollWheel": "Povečava s kolescem miške",
+    "uiFontSize": {
+      "label": "Velikost pisave vmesnika",
+      "verySmall": "Zelo majhno",
+      "small": "Majhno",
+      "medium": "Srednje",
+      "large": "Veliko",
+      "veryLarge": "Zelo veliko"
+    }
   },
   "filters": {
     "gallery": {

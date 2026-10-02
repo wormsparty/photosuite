@@ -9,6 +9,9 @@ import { describe, it } from "node:test";
 
 import {
   DEFAULT_EDITOR_PREFS,
+  UI_FONT_SIZE_LABEL_KEYS,
+  UI_FONT_SIZE_STEPS,
+  uiFontSizePx,
   EDITOR_PERSISTED_PARAM_MAP,
   EDITOR_PREFERENCES,
   EDITOR_PREFERENCES_BY_KEY,
@@ -89,6 +92,32 @@ describe("core/editor-preferences.js", () => {
     applyEditorParamsToPrefs(prefs, { guides: null, grid: true });
     assert.equal(prefs.guides, true);
     assert.equal(prefs.showGrid, true);
+  });
+
+  // The interface is dimensioned in `em` off one base size, so this preference
+  // is what makes the app legible on a high-DPI display.
+  describe("UI font size", () => {
+    it("offers a step per label, with the stylesheet's own size in the middle", () => {
+      assert.equal(UI_FONT_SIZE_STEPS.length, UI_FONT_SIZE_LABEL_KEYS.length);
+      assert.equal(UI_FONT_SIZE_STEPS[DEFAULT_EDITOR_PREFS.uiFontSize], 13, "default must match the CSS");
+      const ascending = [...UI_FONT_SIZE_STEPS].sort((a, b) => a - b);
+      assert.deepEqual([...UI_FONT_SIZE_STEPS], ascending, "steps must read smallest first");
+    });
+
+    it("resolves a stored step to pixels, and anything odd to the default", () => {
+      assert.equal(uiFontSizePx({ uiFontSize: 0 }), UI_FONT_SIZE_STEPS[0]);
+      assert.equal(uiFontSizePx({ uiFontSize: 4 }), UI_FONT_SIZE_STEPS[4]);
+      assert.equal(uiFontSizePx({}), 13, "a settings file predating this reads as Medium");
+      assert.equal(uiFontSizePx({ uiFontSize: 99 }), 13);
+    });
+
+    // A stored step out of range would otherwise leave the interface with no
+    // size at all.
+    it("clamps a stored step into the range", () => {
+      assert.equal(normalizeEditorPrefs({ uiFontSize: 99 }).uiFontSize, UI_FONT_SIZE_STEPS.length - 1);
+      assert.equal(normalizeEditorPrefs({ uiFontSize: -3 }).uiFontSize, 2);
+      assert.equal(normalizeEditorPrefs({ uiFontSize: 3.4 }).uiFontSize, 3);
+    });
   });
 
   it("normalises what it reads back from disk", () => {
