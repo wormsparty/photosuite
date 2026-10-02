@@ -236,6 +236,30 @@ describe("grayscale fill cache and history", () => {
     assert.deepEqual(mask.channel, filled);
   });
 
+  it("applies non-normal blend modes to uncached grayscale targets", () => {
+    const { mask, layer, doc, tool } = fixture("layer mask", false);
+    doc.selectionMask = { rect: mask.rect.clone(), channel: new Uint8Array(8).fill(255) };
+    tool.fillRegionWithColor(doc, layer, doc.selectionMask, 200, 200, 200, 255, "mul ", "edit.fill");
+    assert.deepEqual(Array.from(mask.channel), new Array(8).fill(15));
+  });
+
+  it("applies non-normal blend modes to cached grayscale targets", () => {
+    const { mask, layer, doc, tool } = fixture("layer mask", true);
+    doc.selectionMask = { rect: mask.rect.clone(), channel: new Uint8Array(8).fill(255) };
+    layer.updatePixCache(doc, doc.selectionMask, true);
+    tool.fillRegionWithColor(doc, layer, doc.selectionMask, 200, 200, 200, 255, "mul ", "edit.fill");
+    assert.deepEqual(Array.from(mask.channel), new Array(8).fill(15));
+  });
+
+  for (const kind of ["extra channel", "smart-filter mask"]) {
+    it(`applies non-normal blend modes to a ${kind} target`, () => {
+      const { mask, layer, doc, tool } = fixture(kind, false);
+      doc.selectionMask = { rect: mask.rect.clone(), channel: new Uint8Array(8).fill(255) };
+      tool.fillRegionWithColor(doc, layer, doc.selectionMask, 200, 200, 200, 255, "mul ", "edit.fill");
+      assert.deepEqual(Array.from(mask.channel), new Array(8).fill(15));
+    });
+  }
+
   it("clears a smart-filter mask over its full surface without selection", () => {
     const { mask, layer, doc, tool } = fixture("smart-filter mask", false);
     doc.selectionMask = null;

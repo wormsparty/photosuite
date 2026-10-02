@@ -389,6 +389,28 @@ PaintTool.prototype.fillRegionWithColor = function(doc, layer, selectionMask, re
   fillBuffer(fillRgba, packedRgba);
   this.applyFillToTarget(doc, layer, selectionMask, fillRgba, blendMode, historyLabelKey)
 };
+
+function blendGrayscaleTarget(blendMode, sourceGray, sourceAlpha, destGray) {
+  if (blendMode == null || blendMode == "norm") return;
+  var pixelCount = destGray.length,
+    sourceRgba = allocBuffer(pixelCount * 4),
+    destRgba = allocBuffer(pixelCount * 4);
+  for (var idx = 0; idx < pixelCount; idx++) {
+    var source = sourceGray[idx], dest = destGray[idx], offset = idx << 2;
+    sourceRgba[offset] = source;
+    sourceRgba[offset + 1] = source;
+    sourceRgba[offset + 2] = source;
+    sourceRgba[offset + 3] = sourceAlpha[idx];
+    destRgba[offset] = dest;
+    destRgba[offset + 1] = dest;
+    destRgba[offset + 2] = dest;
+    destRgba[offset + 3] = 255;
+  }
+  var targetRect = new Rect(0, 0, pixelCount, 1);
+  composite(blendMode, sourceRgba, targetRect, destRgba, targetRect, targetRect, 1);
+  extractChannelByte(destRgba, destGray, 0);
+}
+
 PaintTool.prototype.applyFillToTarget = function(doc, layer, selectionMask, fillRgba, blendMode, historyLabelKey) {
   var paintTarget = this.resolvePaintTarget(doc),
     layerIndex = paintTarget.layerIndex,
@@ -417,7 +439,11 @@ PaintTool.prototype.applyFillToTarget = function(doc, layer, selectionMask, fill
     var pixCacheBefore = layer.pixCache.selectionPixels,
       pixCacheAfter = layer.pixCache.selectionPixels.slice(0);
     if (pixelContentKind <= 0) copyBuffer(fillRgba, pixCacheAfter);
-    else compositeDissolvedDitheredClipped(grayMask, targetRect, pixCacheAfter, targetRect, fillAlpha, targetRect, 1);
+    else {
+      if (blendMode == null || blendMode == "norm") {
+        compositeDissolvedDitheredClipped(grayMask, targetRect, pixCacheAfter, targetRect, fillAlpha, targetRect, 1);
+      } else blendGrayscaleTarget(blendMode, grayMask, fillAlpha, pixCacheAfter);
+    }
     var tempHistoryEntry = new HistoryEntry("edit.fill", this);
     tempHistoryEntry.data = {
       actionKind: "drawtemp",
@@ -439,7 +465,11 @@ PaintTool.prototype.applyFillToTarget = function(doc, layer, selectionMask, fill
       if (layer.isLockBitSet(0)) extractChannel(transparencyLockBuffer, destBuffer, 3)
     } else {
       if (selectionMask != null) multiplyMaskByRegion(selectionChannel, targetRect, fillAlpha, targetRect);
-      compositeDissolvedDitheredClipped(grayMask, targetRect, destBuffer, targetRect, fillAlpha, targetRect, 1);
+      if (blendMode == null || blendMode == "norm") {
+        compositeDissolvedDitheredClipped(grayMask, targetRect, destBuffer, targetRect, fillAlpha, targetRect, 1);
+      } else {
+        blendGrayscaleTarget(blendMode, grayMask, fillAlpha, destBuffer);
+      }
     }
     this.pushPaintHistory(doc, true, historyLabelKey, layerIndex, pixelContentKind, targetRect, destBuffer)
   }
