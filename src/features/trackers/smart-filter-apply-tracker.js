@@ -148,9 +148,24 @@ function installSmartFilterApplyTrackerPrototype(Tracker) {
   };
 
   Tracker.prototype.handlePlacedLayerFilterEdit = function (filterEvent, layerState, colorEnv) {
-    const targetLayer = layerState.layers[filterEvent.smartFilterRef.layerIndex];
+    const smartFilterRef = filterEvent.smartFilterRef;
+    if (
+      smartFilterRef == null
+      || !Number.isInteger(smartFilterRef.layerIndex)
+      || smartFilterRef.layerIndex < 0
+      || smartFilterRef.layerIndex >= layerState.layers.length
+      || !Number.isInteger(smartFilterRef.index)
+      || smartFilterRef.index < 0
+    ) return;
+    const targetLayer = layerState.layers[smartFilterRef.layerIndex];
+    if (targetLayer == null || targetLayer.add == null || targetLayer.add.placedData == null) return;
     const filterClassId = filterEvent.operationId;
     if (filterEvent.actionKind == "edit") {
+      const existingFilterFx = targetLayer.add.placedData.filterFX;
+      const existingFxList = existingFilterFx && existingFilterFx.v && existingFilterFx.v.filterFXList
+        ? existingFilterFx.v.filterFXList.v
+        : null;
+      if (smartFilterRef.index > (existingFxList == null ? 0 : existingFxList.length)) return;
       if (this.filterEditHistoryEntry == null) {
         this.filterEditHistoryEntry = new HistoryEntry(resolveFilterDisplayName(filterClassId), this);
         this.filterEditHistoryEntry.data = {
@@ -167,11 +182,11 @@ function installSmartFilterApplyTrackerPrototype(Tracker) {
         targetLayer.rasterizeSmartObject(layerState);
       }
       const fxList = targetLayer.add.placedData.filterFX.v.filterFXList.v;
-      if (fxList[filterEvent.smartFilterRef.index] == null) {
+      if (fxList[smartFilterRef.index] == null) {
         fxList.push(FilterDefs.createFilterFxDescriptor(filterClassId, colorEnv));
       }
       if (filterEvent.operationData) {
-        writeFilterOptionsOntoFxEntry(fxList[filterEvent.smartFilterRef.index], filterClassId, filterEvent);
+        writeFilterOptionsOntoFxEntry(fxList[smartFilterRef.index], filterClassId, filterEvent);
       }
       this.filterEditHistoryEntry.data.placedDataAfter = JSON.parse(JSON.stringify(targetLayer.add.placedData));
       this.redo(this.filterEditHistoryEntry.data, layerState);

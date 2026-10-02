@@ -149,4 +149,51 @@ describe("features/trackers/smart-filter-apply-tracker.js", () => {
     });
     assert.equal(tracker.previewSnapshots, null);
   });
+
+  it("ignores stale or malformed placed-filter references before mutation", () => {
+    const tracker = new TrackerRegistry.SmartFilterApplyTracker();
+    const layer = makePlacedLayer();
+    const doc = makeDoc([layer]);
+    const colorEnv = { colorInt: 0, bgColor: 0xffffff };
+    const refs = [
+      { layerIndex: -1, index: 0 },
+      { layerIndex: 1, index: 0 },
+      { layerIndex: 0.5, index: 0 },
+      { layerIndex: 0, index: -1 },
+      { layerIndex: 0, index: 0.5 },
+      { layerIndex: 0, index: 2 },
+    ];
+    for (const smartFilterRef of refs) {
+      assert.doesNotThrow(() => tracker.handleInput(
+        { actionKind: "edit", operationId: "GsnB", operationData: { value: 1 }, smartFilterRef },
+        {},
+        doc,
+        {},
+        colorEnv,
+      ));
+      assert.equal(tracker.filterEditHistoryEntry, null);
+      assert.equal(layer.add.placedData.filterFX, null);
+    }
+  });
+
+  it("does not create a filter entry for an index beyond the current stack", () => {
+    const tracker = new TrackerRegistry.SmartFilterApplyTracker();
+    const layer = makePlacedLayer();
+    layer.add.placedData.filterFX = FilterDefs.createEmptyFilterFxStyle();
+    const doc = makeDoc([layer]);
+    assert.doesNotThrow(() => tracker.handleInput(
+      {
+        actionKind: "edit",
+        operationId: "GsnB",
+        operationData: { value: 1 },
+        smartFilterRef: { layerIndex: 0, index: 2 },
+      },
+      {},
+      doc,
+      {},
+      { colorInt: 0, bgColor: 0xffffff },
+    ));
+    assert.equal(layer.add.placedData.filterFX.v.filterFXList.v.length, 0);
+    assert.equal(tracker.filterEditHistoryEntry, null);
+  });
 });
