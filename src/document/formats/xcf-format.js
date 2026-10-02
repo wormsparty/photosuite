@@ -192,6 +192,14 @@ function parse(arrayBuffer, doc) {
     var channel = readChannel(bytes, channelIds[channelIdx], compressionProps, idSize, bitDepth, budget, doc.width, doc.height);
     if (channel.properties[XcfPropType.PROP_SELECTION]) {
       doc.selectionMask = { channel: channel.channelPlane, rect: new Rect(0, 0, doc.width, doc.height) };
+    } else {
+      const savedChannel = new Mask();
+      savedChannel.name = channel.name;
+      savedChannel.color = 0;
+      savedChannel.rect = new Rect(0, 0, doc.width, doc.height);
+      savedChannel.channel = channel.channelPlane;
+      if (!Array.isArray(doc.extraChannels)) doc.extraChannels = [];
+      doc.extraChannels.push(savedChannel);
     }
   }
 }
@@ -557,7 +565,7 @@ function readChannel(bytes, offset, compressionProps, idSize, bitDepth, budget, 
   var planarBuffer = new PlanarRgbaBuffer(channelWidth * channelHeight);
   readHierarchicalPixelData(bytes, pixelDataOffset, planarBuffer, compressionProps, idSize, bitDepth);
   budget.used -= channelPlaneBytes * 3;
-  return { channelPlane: planarBuffer.h, properties: properties, width: channelWidth, height: channelHeight };
+  return { name: channelName.str, channelPlane: planarBuffer.h, properties: properties, width: channelWidth, height: channelHeight };
 }
 
 /** Validate hierarchy and level metadata before allocating destination planes. */
