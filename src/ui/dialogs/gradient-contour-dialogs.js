@@ -274,8 +274,10 @@ GradientEditorDialog.prototype.onGradientWidgetChanged = function(widgetEvent) {
     };
     else if (selectedColorStop.Clr) delete selectedColorStop.Clr
   }
-  if (this.activeTransparencyMidpointIndex != -1) transparencyStops[this.activeTransparencyMidpointIndex].v.Mdpn.v = this.transparencyStopPositionSlider.getValue();
-  if (this.activeColorMidpointIndex != -1) colorStops[this.activeColorMidpointIndex].v.Mdpn.v = this.colorStopPositionSlider.getValue();
+  // Midpoints are descriptor longs; a typed fractional percentage would make
+  // PSD/ATN export reject the gradient.
+  if (this.activeTransparencyMidpointIndex != -1) transparencyStops[this.activeTransparencyMidpointIndex].v.Mdpn.v = Math.round(this.transparencyStopPositionSlider.getValue());
+  if (this.activeColorMidpointIndex != -1) colorStops[this.activeColorMidpointIndex].v.Mdpn.v = Math.round(this.colorStopPositionSlider.getValue());
   this.redraw()
 };
 GradientEditorDialog.prototype.onGradientCanvasPointerDown = function(pointerEvent) {
