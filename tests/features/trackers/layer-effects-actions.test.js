@@ -259,6 +259,45 @@ describe("features/trackers/layer-effects-actions.js", () => {
     assert.equal(doc.history.length, 0);
   });
 
+  it("ignores raster-mask actions whose selected layer reference is stale", () => {
+    const tracker = new TrackerRegistry.LayerEffectsTracker();
+    const doc = makeDoc([makeLayer()], {
+      selectedLayerIndices: [4],
+      selectionMask: null,
+    });
+
+    for (const actionKind of [
+      Layer.addRasterMask,
+      Layer.routeMaskFromSelection,
+      Layer.deleteRasterMask,
+    ]) {
+      assert.doesNotThrow(() => tracker.handleInput(
+        { actionKind }, {}, doc, idleKeyboard(), {},
+      ));
+    }
+    assert.equal(doc.history.length, 0);
+  });
+
+  it("ignores raster-mask copies with stale layers or a missing source mask", () => {
+    const tracker = new TrackerRegistry.LayerEffectsTracker();
+    const sourceLayer = makeLayer({ getMask() { return null; } });
+    const destinationLayer = makeLayer({ getMask() { return null; } });
+    const doc = makeDoc([sourceLayer, destinationLayer], {
+      selectedLayerIndices: [0],
+    });
+
+    for (const event of [
+      { actionKind: Layer.copyRasterMask, sourceLayerIndex: 4, destinationLayerIndex: 1 },
+      { actionKind: Layer.copyRasterMask, sourceLayerIndex: 0, destinationLayerIndex: 4 },
+      { actionKind: Layer.copyRasterMask, sourceLayerIndex: 0, destinationLayerIndex: 1 },
+    ]) {
+      assert.doesNotThrow(() => tracker.handleInput(
+        event, {}, doc, idleKeyboard(), {},
+      ));
+    }
+    assert.equal(doc.history.length, 0);
+  });
+
   it("ignores smart-filter master and variant toggles without a filter stack", () => {
     const tracker = new TrackerRegistry.LayerEffectsTracker();
     const layer = makeLayer({ add: {} });

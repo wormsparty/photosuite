@@ -783,8 +783,10 @@ function handleExtraChannelOp(event, dispatcher, doc, panelContext, appData, eve
 function handleRouteMaskFromSelection(event, dispatcher, doc, panelContext, appData) {
   if (doc.selectedLayerIndices.length != 1) return;
   const selectedLayerIndex = doc.selectedLayerIndices[0];
+  const selectedLayer = doc.layers[selectedLayerIndex];
+  if (selectedLayer == null) return;
   const altPressed = panelContext.isPressed(KeyboardHandler.Alt);
-  if (doc.layers[selectedLayerIndex].getMask() == null) {
+  if (selectedLayer.getMask() == null) {
     event.maskRevealMode = doc.selectionMask ? (!altPressed ? "RvlS" : "HdSl") : !altPressed ? "RvlA" : "HdAl";
     event.actionKind = Layer.addRasterMask;
     } else {
@@ -795,7 +797,9 @@ function handleRouteMaskFromSelection(event, dispatcher, doc, panelContext, appD
 
 function handleDeleteRasterMask(event, dispatcher, doc, panelContext, appData, eventCode, layerIndex) {
     if (doc.selectedLayerIndices.length != 1) return;
-  if (doc.layers[layerIndex].getMask() != null) {
+  const layer = doc.layers[layerIndex];
+  if (layer == null) return;
+  if (layer.getMask() != null) {
     const historyEntry = createHistoryEntry("layer.deleteRasterMask", this, {
         actionKind: eventCode,
       layerIndex,
@@ -1192,6 +1196,7 @@ function handleAddRasterMask(event, dispatcher, doc) {
   if (doc.selectedLayerIndices.length != 1) return;
   const selectedLayerIndex = doc.selectedLayerIndices[0];
   const layer = doc.layers[selectedLayerIndex];
+  if (layer == null || layer.add == null) return;
   if (layer.add.vmsk && layer.d == null) layer.invalidate(doc);
   const existingMask = layer.getMask();
   if (existingMask == null || event.forceNewMask) {
@@ -1224,8 +1229,10 @@ function handleAddRasterMask(event, dispatcher, doc) {
 function handleCopyRasterMask(event, dispatcher, doc, panelContext) {
   const sourceLayer = doc.layers[event.sourceLayerIndex];
   const destLayer = doc.layers[event.destinationLayerIndex];
+  if (sourceLayer == null || destLayer == null) return;
     if (destLayer.getMask()) return;
   const sourceMask = sourceLayer.getMask();
+  if (sourceMask == null) return;
   const historyEntry = createHistoryEntry("layer.addRasterMask", this, {});
     if (event.keepSourceOnCopy) {
     const clonedMask = sourceMask.clone();
