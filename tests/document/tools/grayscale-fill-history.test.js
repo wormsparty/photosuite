@@ -260,17 +260,15 @@ describe("grayscale fill cache and history", () => {
     });
   }
 
-  it("clears a smart-filter mask over its full surface without selection", () => {
+  it("leaves a smart-filter mask unchanged by Clear without selection", () => {
     const { mask, layer, doc, tool } = fixture("smart-filter mask", false);
     doc.selectionMask = null;
     const originalArtwork = layer.buffer.slice();
+    const originalEntry = doc.entry;
     tool.handleInput({ actionKind: "fromAction", scriptActionPayload: { uf: "delete" } }, {}, doc, {}, { bgColor: 0 });
-    assert.deepEqual(Array.from(mask.channel), [0, 0, 0, 0, 0, 0, 0, 0]);
-    assert.deepEqual(layer.buffer, originalArtwork);
-    tool.undo(doc.entry.data, doc);
     assert.deepEqual(Array.from(mask.channel), new Array(8).fill(20));
-    tool.redo(doc.entry.data, doc);
-    assert.deepEqual(Array.from(mask.channel), new Array(8).fill(0));
+    assert.deepEqual(layer.buffer, originalArtwork);
+    assert.equal(doc.entry, originalEntry);
   });
 
 });

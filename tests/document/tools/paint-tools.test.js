@@ -92,7 +92,10 @@ describe("document/tools/paint-tools.js", () => {
     });
   }
 
-  it("clears the full active extra channel when no selection exists", () => {
+  // Edit > Clear is disabled without a selection, and Cut reuses this action
+  // after an earlier copy; clearing the whole target here would destroy pixels
+  // that were never copied.
+  it("leaves an active extra channel unchanged when no selection exists", () => {
     const mask = new Mask();
     mask.rect = new Rect(1, 2, 3, 2);
     mask.channel = new Uint8Array([20, 40, 80, 120, 160, 220]);
@@ -105,16 +108,12 @@ describe("document/tools/paint-tools.js", () => {
       activeChannels: [0], extraChannels: [mask], selectionMask: null,
     };
     const tool = new PaintTool();
-    let history;
-    tool.pushPaintHistory = (_doc, _redo, _label, layerIndex, contentKind, rect, buffer) => {
-      history = { layerIndex, contentKind, rect, buffer };
-    };
+    let historyCount = 0;
+    tool.pushPaintHistory = () => { historyCount++; };
     tool.handleInput({ actionKind: "fromAction", scriptActionPayload: { uf: "delete" } },
       null, doc, null, { bgColor: 0 });
-    assert.deepEqual(history.layerIndex, -1);
-    assert.equal(history.contentKind, 1);
-    assert.deepEqual([history.rect.x, history.rect.y, history.rect.width, history.rect.height], [1, 2, 3, 2]);
-    assert.deepEqual(Array.from(history.buffer.subarray(0, 6)), new Array(6).fill(0));
+    assert.equal(historyCount, 0);
+    assert.deepEqual(Array.from(mask.channel), [20, 40, 80, 120, 160, 220]);
   });
 
   it("ignores Edit Clear with malformed active extra-channel references", () => {
@@ -124,7 +123,8 @@ describe("document/tools/paint-tools.js", () => {
       mask.channel = Uint8Array.from([20, 40]);
       const doc = {
         width: 2, height: 1, layers: [], selectedLayerIndices: [],
-        activeChannels, extraChannels: [mask], selectionMask: null,
+        activeChannels, extraChannels: [mask],
+        selectionMask: { rect: new Rect(0, 0, 2, 1), channel: Uint8Array.from([255, 255]) },
         ensureLayerEditableForTools() { throw new Error("unexpected layer edit check"); },
       };
       const tool = new PaintTool();
@@ -138,7 +138,7 @@ describe("document/tools/paint-tools.js", () => {
     }
   });
 
-  it("clears the full raster layer when no selection exists", () => {
+  it("leaves a raster layer unchanged when no selection exists", () => {
     const layer = new Layer();
     layer.rect = new Rect(0, 0, 2, 1);
     layer.buffer = Uint8Array.from([20, 40, 80, 255, 100, 120, 160, 255]);
@@ -147,14 +147,11 @@ describe("document/tools/paint-tools.js", () => {
       activeChannels: [], extraChannels: [], selectionMask: null,
     };
     const tool = new PaintTool();
-    let history;
-    tool.pushPaintHistory = (_doc, _redo, _label, layerIndex, contentKind, rect, buffer) => {
-      history = { layerIndex, contentKind, rect, buffer };
-    };
+    let historyCount = 0;
+    tool.pushPaintHistory = () => { historyCount++; };
     tool.applyScriptedDelete(doc, 0, layer, { bgColor: 0 });
-    assert.equal(history.layerIndex, 0);
-    assert.equal(history.contentKind, 0);
-    assert.deepEqual(Array.from(history.buffer), [20, 40, 80, 0, 100, 120, 160, 0]);
+    assert.equal(historyCount, 0);
+    assert.deepEqual(Array.from(layer.buffer), [20, 40, 80, 255, 100, 120, 160, 255]);
   });
 
   it("registerPaintTools wires paint and gradient tool constructors", () => {
