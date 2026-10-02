@@ -164,9 +164,6 @@ ActionDescUtil.playActionSetSteps = function(doc, actionSets, setIndex, stepInde
   let action;
   if (actionPath === undefined) {
     action = ActionDescUtil.findActionInSet(actionSets, setIndex, stepIndex);
-    if (!action && ActionDescUtil.isAmbiguousActionName(actionSets, setIndex, stepIndex)) {
-      showToast("Several actions are named \"" + setIndex + "\" in set \"" + stepIndex + "\"; none was played.");
-    }
   } else {
     const [setPosition, actionPosition] = Array.isArray(actionPath) ? actionPath : [];
     action = Number.isInteger(setPosition) && Number.isInteger(actionPosition) &&
@@ -233,25 +230,14 @@ ActionDescUtil.playActionSetSteps = function(doc, actionSets, setIndex, stepInde
     if (!existingPlayback) activeActionPlaybacks.delete(dispatcher);
   }
 };
+// Name-only references (scripts, recorded Play and conditionals) resolve like
+// Photoshop: the first action with that name in the first set with that name.
 ActionDescUtil.findActionInSet = function(actionSets, actionName, setName) {
-  let action;
   for (const set of actionSets) {
     if (set.name != setName) continue;
-    for (const candidate of set.children) {
-      if (candidate.name != actionName) continue;
-      if (action) return undefined;
-      action = candidate;
-    }
+    for (const candidate of set.children) if (candidate.name == actionName) return candidate;
   }
-  return action;
-};
-ActionDescUtil.isAmbiguousActionName = function(actionSets, actionName, setName) {
-  let matches = 0;
-  for (const set of actionSets) {
-    if (set.name != setName) continue;
-    for (const candidate of set.children) if (candidate.name == actionName && ++matches > 1) return true;
-  }
-  return false;
+  return undefined;
 };
 ActionDescUtil.collectActionStepsFromSet = function(actionSets, setIndex, stepIndex, outStack) {
   const steps = ActionDescUtil.findActionInSet(actionSets, setIndex, stepIndex)?.children;

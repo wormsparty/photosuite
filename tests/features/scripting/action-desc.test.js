@@ -147,7 +147,7 @@ describe("features/scripting/action-desc.js", () => {
     assert.deepEqual(dispatched, []);
   });
 
-  it("does not choose an arbitrary action when a scripted name pair is ambiguous", () => {
+  it("plays the first match of a duplicated scripted name pair, as Photoshop does", () => {
     const actionSets = [
       { name: "Set", children: [
         { name: "Action", children: [{ enabled: true, uf: "first" }] },
@@ -167,11 +167,11 @@ describe("features/scripting/action-desc.js", () => {
     } finally {
       installToastPainter(null);
     }
-    assert.deepEqual(dispatched, []);
-    assert.deepEqual(messages, ['Several actions are named "Action" in set "Set"; none was played.']);
+    assert.deepEqual(dispatched, ["first"]);
+    assert.deepEqual(messages, []);
   });
 
-  it("a nested Play dispatches a unique target and leaves an ambiguous target untouched", () => {
+  it("a nested Play plays the first duplicate and skips a removed target", () => {
     const playStep = (actionName, setName) => ({
       enabled: true,
       uf: "play",
@@ -187,7 +187,7 @@ describe("features/scripting/action-desc.js", () => {
           playStep("Removed", "Set"),
         ] },
         { name: "Unique", children: [{ enabled: true, uf: "unique-step" }] },
-        { name: "Duplicate", children: [{ enabled: true, uf: "wrong-first" }] },
+        { name: "Duplicate", children: [{ enabled: true, uf: "first-duplicate" }] },
         { name: "Duplicate", children: [{ enabled: true, uf: "wrong-last" }] },
       ] },
     ];
@@ -203,7 +203,7 @@ describe("features/scripting/action-desc.js", () => {
       },
     };
     ActionDescUtil.playActionSetSteps({}, actionSets, "Caller", "Set", dispatcher);
-    assert.deepEqual(dispatched, ["unique-step"]);
+    assert.deepEqual(dispatched, ["unique-step", "first-duplicate"]);
   });
 
   it("stops a direct nested Play self-reference and continues the caller", () => {
