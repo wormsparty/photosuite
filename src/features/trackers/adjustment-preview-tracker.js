@@ -90,6 +90,18 @@ AdjustmentPreviewTracker.captureLayerPixelSnapshots = function (
     layerState.activeChannels.length != 0
       ? [-1 - layerState.activeChannels[0]]
       : layerState.selectedLayerIndices;
+  if (layerState.activeChannels.length != 0) {
+    if (!Array.isArray(layerState.extraChannels)) return snapshots;
+    const activeChannelSet = new Set(layerState.activeChannels);
+    if (
+      activeChannelSet.size != layerState.activeChannels.length
+      || !layerState.activeChannels.every((channelIndex) =>
+        Number.isInteger(channelIndex)
+        && channelIndex >= 0
+        && channelIndex < layerState.extraChannels.length,
+      )
+    ) return snapshots;
+  }
   for (let idx = 0; idx < layerIndices.length; idx++) {
     const layerIndex = layerIndices[idx];
     const targetLayer = layerIndex < 0 ? null : layerState.layers[layerIndex];

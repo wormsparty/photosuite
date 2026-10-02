@@ -151,6 +151,30 @@ describe("features/trackers/adjustment-preview-tracker.js", () => {
     assert.equal(snapshot.selectionMask, undefined);
   });
 
+  it("ignores a stale or malformed active extra-channel index", () => {
+    const Tracker = TrackerRegistry.AdjustmentPreviewTracker;
+    const channelRect = new Rect(0, 0, 2, 2);
+    const channel = {
+      rect: channelRect,
+      channel: allocBuffer(channelRect.area()),
+      color: 0,
+    };
+    const layerState = {
+      width: 2,
+      height: 2,
+      layers: [],
+      selectedLayerIndices: [],
+      extraChannels: [channel],
+      selectionMask: null,
+    };
+
+    for (const activeChannels of [[-1], [1], [0.5], [0, 0]]) {
+      layerState.activeChannels = activeChannels;
+      assert.doesNotThrow(() => Tracker.captureLayerPixelSnapshots(layerState, false));
+      assert.deepEqual(Tracker.captureLayerPixelSnapshots(layerState, false), []);
+    }
+  });
+
   it("handleInput start with no selection is a no-op", () => {
     const tracker = new TrackerRegistry.AdjustmentPreviewTracker();
     assert.equal(
