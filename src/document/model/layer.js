@@ -643,11 +643,11 @@ export class Layer {
     var maskOrFilterMask = pixCache.pixelContent == 1 ? this.getMask() : this.getLinkedPlacedItem(doc).d;
     maskOrFilterMask.channel = pixCache.channelBackup;
     maskOrFilterMask.rect = pixCache.rectBackup;
-    if (this.pixelContent == 1) {
+    if (pixCache.pixelContent == 1) {
       maskOrFilterMask.maskCombineDirty = true;
       this.invalidate(doc)
     }
-    if (this.pixelContent == 3) this.markDirty()
+    if (pixCache.pixelContent == 3) this.markDirty()
   }
   this.pixCache = savedPixCache
   }
@@ -709,18 +709,18 @@ export class Layer {
     this.rect = unionRect;
     this.markDirty()
   } else {
-    var maskOrFilterMask = this.pixelContent == 1 ? this.getMask() : this.getLinkedPlacedItem(doc).d,
+    var maskOrFilterMask = pixCache.pixelContent == 1 ? this.getMask() : this.getLinkedPlacedItem(doc).d,
       channelBuffer = allocBuffer(unionRect.area());
     channelBuffer.fill(maskOrFilterMask.color);
     copyChannel(pixCache.layerBufferBackup, pixCache.layerRect, channelBuffer, unionRect);
     compositeDissolvedDitheredClipped(pixCache.selectionPixels, pixCache.selectionRect, channelBuffer, unionRect, selection.channel, unionRect, 1);
     maskOrFilterMask.channel = channelBuffer;
     maskOrFilterMask.rect = unionRect.clone();
-    if (this.pixelContent == 1) {
+    if (pixCache.pixelContent == 1) {
       maskOrFilterMask.maskCombineDirty = true;
       this.invalidate(doc)
     }
-    if (this.pixelContent == 3) this.markDirty()
+    if (pixCache.pixelContent == 3) this.markDirty()
   }
   }
 
