@@ -706,6 +706,13 @@ function applyExtraChannelFromAction(event, doc, extraChannelsAfter, activeChann
       } else if (actionKind == "delete") {
     const sortedActiveChannels = doc.activeChannels.slice(0).sort((leftIdx, rightIdx) => rightIdx - leftIdx);
     if (sortedActiveChannels.length == 0) return { selectionAfter, abort: true };
+    const validActiveChannels = sortedActiveChannels.every((channelIdx, channelPos) =>
+      Number.isInteger(channelIdx)
+      && channelIdx >= 0
+      && channelIdx < extraChannelsAfter.length
+      && (channelPos == 0 || channelIdx != sortedActiveChannels[channelPos - 1])
+    );
+    if (!validActiveChannels) return { selectionAfter, abort: true };
     for (let loopIdx = 0; loopIdx < sortedActiveChannels.length; loopIdx++) {
       extraChannelsAfter.splice(sortedActiveChannels[loopIdx], 1);
     }

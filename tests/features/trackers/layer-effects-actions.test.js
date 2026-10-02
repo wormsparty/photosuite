@@ -138,6 +138,32 @@ describe("features/trackers/layer-effects-actions.js", () => {
     assert.equal(doc.extraChannels[0].active, false);
   });
 
+  it("ignores a recorded delete action with stale or malformed active-channel indices", () => {
+    for (const activeChannels of [[-1], [4], [0, 0], [0.5]]) {
+      const tracker = new TrackerRegistry.LayerEffectsTracker();
+      const channels = ["Red", "Green"].map((name) => {
+        const channel = new Mask();
+        channel.name = name;
+        return channel;
+      });
+      const doc = makeDoc([makeLayer()], {
+        extraChannels: channels,
+        activeChannels,
+        selectionMask: null,
+      });
+
+      assert.doesNotThrow(() => tracker.handleInput(
+        {
+          actionKind: Layer.extraChannelOp,
+          operation: "fromAction",
+          recordedActionPayload: { uf: "delete", actionDescriptor: {} },
+        }, {}, doc, idleKeyboard(), {},
+      ));
+      assert.deepEqual(doc.extraChannels.map((channel) => channel.name), ["Red", "Green"]);
+      assert.equal(doc.history.length, 0);
+    }
+  });
+
   it("ignores a channel rename whose index is no longer present", () => {
     const tracker = new TrackerRegistry.LayerEffectsTracker();
     const doc = makeDoc([makeLayer()], {
