@@ -218,8 +218,9 @@ export function composite(mode, sourceRgba, sourceRect, destRgba, destRect, clip
   if (styleParams == null) styleParams = createDefaultBlendStyleParams();
   if (FILL_OPACITY_BLEND_MODES.indexOf(mode) == -1) {
     opacity = opacity * styleParams.fill;
-    styleParams.fill = 1;
-    styleParams.style = false
+    // Fill opacity and layer-style blending are properties of this composite
+    // operation, not mutable state on the caller's reusable options object.
+    styleParams = { ...styleParams, fill: 1, style: false };
   }
   routeCompositeBlend(mode, sourceRgba, sourceRect, destRgba, destRect, clipRect, opacity, styleParams);
 }

@@ -90,6 +90,23 @@ describe("engine/compositing/compositing-ops.js compositing pipelines", () => {
     assert.deepEqual(Array.from(new Uint32Array(dst.buffer)), [4278190080, 4278255360]);
   });
 
+  it("does not mutate reusable style parameters between blend operations", () => {
+    const rect = new Rect(0, 0, 1, 1);
+    const src = new Uint8ClampedArray([220, 120, 40, 255]);
+    const first = new Uint8ClampedArray([30, 80, 200, 255]);
+    const second = new Uint8ClampedArray([30, 80, 200, 255]);
+    const reusable = { fill: 0.25, lu: null, style: true, gd: false };
+
+    composite("mul ", src, rect, first, rect, rect, 1, reusable);
+    assert.equal(reusable.fill, 0.25);
+    assert.equal(reusable.style, true);
+    composite("idiv", src, rect, second, rect, rect, 1, reusable);
+
+    const expected = new Uint8ClampedArray([30, 80, 200, 255]);
+    composite("idiv", src, rect, expected, rect, rect, 1, { ...reusable });
+    assert.deepEqual([...second], [...expected]);
+  });
+
   it("compositeSeparable blends luminosity and darker-color modes", () => {
     const rect = new Rect(0, 0, 2, 1);
     const style = () => ({ fill: 1, lu: null, style: false, gd: false });
