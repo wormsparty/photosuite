@@ -680,6 +680,9 @@ function applyExtraChannelFromAction(event, doc, extraChannelsAfter, activeChann
             return { selectionAfter, abort: true };
           }
           const makeChannelDesc = actionDescriptor.Nw.v;
+          if (makeChannelDesc.Opct == null || makeChannelDesc.Opct.v == null) {
+            return { selectionAfter, abort: true };
+          }
           newChannelMask.color = 255;
       activeChannelsAfter.length = 0;
       activeChannelsAfter.push(insertChannelIndex);
@@ -703,7 +706,14 @@ function applyExtraChannelFromAction(event, doc, extraChannelsAfter, activeChann
       if (channelRef.keyID == "fsel") fromSelection = true;
           else {
         const loadChannelIndex = SelectTool.getDefaultChannelIndexForLoad(doc);
+        if (loadChannelIndex < -4) {
+          const sourceChannelIndex = -loadChannelIndex - 5;
+          if (!Number.isInteger(sourceChannelIndex) || sourceChannelIndex < 0 || sourceChannelIndex >= extraChannelsAfter.length) {
+            return { selectionAfter: selectionMaskAfter, abort: true };
+          }
+        }
         selectionAfter = SelectTool.loadChannelAsSelectionMask(doc, loadChannelIndex);
+        if (selectionAfter == null) return { selectionAfter: selectionMaskAfter, abort: true };
             newChannelMask.color = 0;
         newChannelMask.rect = selectionAfter.rect;
         newChannelMask.channel = selectionAfter.channel;

@@ -213,6 +213,51 @@ describe("features/trackers/layer-effects-actions.js", () => {
     }
   });
 
+  it("ignores partially formed make descriptors", () => {
+    const tracker = new TrackerRegistry.LayerEffectsTracker();
+    const channel = new Mask();
+    channel.name = "Existing";
+    const doc = makeDoc([makeLayer()], {
+      extraChannels: [channel],
+      activeChannels: [0],
+      selectionMask: null,
+    });
+
+    assert.doesNotThrow(() => tracker.handleInput(
+      {
+        actionKind: Layer.extraChannelOp,
+        operation: "fromAction",
+        recordedActionPayload: { uf: "make", actionDescriptor: { Nw: { v: {} } } },
+      }, {}, doc, idleKeyboard(), {},
+    ));
+    assert.equal(doc.extraChannels.length, 1);
+    assert.equal(doc.history.length, 0);
+  });
+
+  it("ignores duplicate actions whose active source channel is stale", () => {
+    const tracker = new TrackerRegistry.LayerEffectsTracker();
+    const channel = new Mask();
+    channel.name = "Existing";
+    const doc = makeDoc([makeLayer()], {
+      extraChannels: [channel],
+      activeChannels: [4],
+      selectionMask: null,
+    });
+
+    assert.doesNotThrow(() => tracker.handleInput(
+      {
+        actionKind: Layer.extraChannelOp,
+        operation: "fromAction",
+        recordedActionPayload: {
+          uf: "duplicate",
+          actionDescriptor: { null: { v: [{ v: { keyID: "Chnl" } }] } },
+        },
+      }, {}, doc, idleKeyboard(), {},
+    ));
+    assert.equal(doc.extraChannels.length, 1);
+    assert.equal(doc.history.length, 0);
+  });
+
   it("ignores unknown recorded extra-channel actions", () => {
     const tracker = new TrackerRegistry.LayerEffectsTracker();
     const doc = makeDoc([makeLayer()], {
