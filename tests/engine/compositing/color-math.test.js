@@ -137,6 +137,29 @@ describe("engine/compositing/color-math.js Lab and invert", () => {
     assert.equal(rgbSaturation({ h: 80, l: 80, O: 80 }), 0);
   });
 
+  describe("invert byte-mask views", () => {
+    for (const length of [0, 1, 2, 3, 4, 5, 7, 8, 9]) {
+      for (const offset of [0, 1, 4]) {
+        it(`inverts only ${length} bytes at offset ${offset}`, () => {
+          const backing = new Uint8Array(offset + length + 3).fill(73);
+          const mask = backing.subarray(offset, offset + length);
+          for (let index = 0; index < length; index++) mask[index] = [0, 1, 64, 127, 128, 254, 255][index % 7];
+          const expected = backing.slice();
+          for (let index = offset; index < offset + length; index++) expected[index] = 255 - expected[index];
+          invert(mask);
+          assert.deepEqual(backing, expected);
+          invert(mask);
+          for (let index = 0; index < length; index++) assert.equal(mask[index], [0, 1, 64, 127, 128, 254, 255][index % 7]);
+        });
+      }
+      it(`inverts an exact ${length}-byte allocation`, () => {
+        const mask = new Uint8Array(length).fill(128);
+        invert(mask);
+        assert.deepEqual(mask, new Uint8Array(length).fill(127));
+      });
+    }
+  });
+
   it("invertAlpha flips only the alpha byte of each pixel", () => {
     const rgba = new Uint8Array([0, 255, 128, 64, 1, 2, 3, 4]);
     invertAlpha(rgba);

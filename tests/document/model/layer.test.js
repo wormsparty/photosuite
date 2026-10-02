@@ -45,6 +45,20 @@ describe("document/model/layer.js", () => {
     });
   });
 
+  it("computeSelectionPixels cuts an exact one-byte selection without altering inputs", () => {
+    const layer = new Layer();
+    layer.rect = new Rect(-1, 2, 2, 1);
+    layer.buffer = new Uint8Array([10, 20, 30, 255, 40, 50, 60, 255]);
+    const selection = { rect: new Rect(-1, 2, 1, 1), channel: new Uint8Array([255]) };
+    const before = layer.buffer.slice();
+    const result = layer.computeSelectionPixels({ selectionMask: selection }, selection, false);
+    assert.deepEqual(result.selectionRect, new Rect(-1, 2, 1, 1));
+    assert.deepEqual([...result.selectionPixels], [10, 20, 30, 255]);
+    assert.deepEqual([...result.layerBufferBackup], [10, 20, 30, 0, 40, 50, 60, 255]);
+    assert.deepEqual(layer.buffer, before);
+    assert.deepEqual(selection.channel, new Uint8Array([255]));
+  });
+
   it("extractSelectionData lifts the selection and, when cutting, returns the hole", () => {
     // A 4x4 opaque red layer with the left half selected.
     const layer = new Layer();

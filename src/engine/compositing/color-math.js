@@ -398,10 +398,13 @@ export function labSimilarity(sample, labMin, labMax, fuzziness, invFuzziness) {
 }
 
 export function invert(buffer) {
-  const words = new Uint32Array(buffer.buffer);
-  for (let idx = 0; idx < words.length; idx++) {
-    words[idx] = ~words[idx];
+  let byteIndex = 0;
+  if (buffer.byteOffset % 4 == 0) {
+    const words = new Uint32Array(buffer.buffer, buffer.byteOffset, Math.floor(buffer.length / 4));
+    for (let idx = 0; idx < words.length; idx++) words[idx] = ~words[idx];
+    byteIndex = words.length * 4;
   }
+  for (; byteIndex < buffer.length; byteIndex++) buffer[byteIndex] = 255 - buffer[byteIndex];
 }
 
 export function invertRgb(rgba) {
