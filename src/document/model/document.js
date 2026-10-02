@@ -603,7 +603,9 @@ export class Document {
       if (layer.add.TySh) {
         return this.promptRasterizeLayer(showFeedback, "brushAndMessages.toolHints.textLayerMustBeRasterizedFirst", returnRasterizeConfirm, onComplete);
       }
-      if (layer.add.placedData) {
+      const editingFilterMask = !requirePixelSurface && layer.pixelContent == 3
+        && layer.getLinkedPlacedItem(this)?.d != null;
+      if (layer.add.placedData && !editingFilterMask) {
         return this.promptRasterizeLayer(showFeedback, "brushAndMessages.toolHints.smartObjectMustBeRasterizedFirst", returnRasterizeConfirm, onComplete);
       }
       if (layer.isLockBitSet(1) || layer.isLockBitSet(31)) {

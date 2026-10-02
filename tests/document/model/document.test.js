@@ -103,6 +103,38 @@ describe("document/model/document.js", () => {
     assert.ok(doc.pathViewport);
   });
 
+  it("allows an existing smart-filter mask while keeping smart-object surfaces and locks protected", () => {
+    const doc = new Document("filter-mask.psd");
+    const linkedItem = { d: { channel: new Uint8Array([255]) } };
+    const layer = {
+      add: { placedData: {} },
+      pixelContent: 3,
+      getLinkedPlacedItem() { return linkedItem; },
+      hasPixelData() { return true; },
+      isLockBitSet() { return this.locked || false; },
+    };
+    doc.layers = [layer];
+    doc.selectedLayerIndices = [0];
+    let rasterizePrompts = 0;
+    doc.promptRasterizeLayer = () => { rasterizePrompts++; return false; };
+
+    assert.equal(doc.ensureLayerEditableForTools(false), true);
+    assert.equal(rasterizePrompts, 0);
+    assert.equal(doc.ensureLayerEditableForTools(false, true), false);
+    assert.equal(rasterizePrompts, 1);
+    layer.pixelContent = 0;
+    assert.equal(doc.ensureLayerEditableForTools(false), false);
+    assert.equal(rasterizePrompts, 2);
+    layer.pixelContent = 3;
+    linkedItem.d = null;
+    assert.equal(doc.ensureLayerEditableForTools(false), false);
+    assert.equal(rasterizePrompts, 3);
+    linkedItem.d = { channel: new Uint8Array([255]) };
+    layer.locked = true;
+    assert.equal(doc.ensureLayerEditableForTools(false), false);
+    assert.equal(rasterizePrompts, 3);
+  });
+
   it("isModified reflects saved history index", () => {
     const doc = new Document("demo.psd");
     assert.equal(doc.isModified(), false);
