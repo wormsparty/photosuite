@@ -441,6 +441,16 @@ function handleCopyLayerStyle(event, dispatcher, doc) {
 
 function handleDeleteSmartFilter(event, dispatcher, doc) {
   const sourceLayer = doc.layers[event.sourceLayerIndex];
+  if (
+    sourceLayer == null ||
+    sourceLayer.add == null ||
+    sourceLayer.add.placedData == null ||
+    sourceLayer.add.placedData.filterFX == null ||
+    sourceLayer.add.placedData.filterFX.v == null ||
+    sourceLayer.add.placedData.filterFX.v.filterFXList == null ||
+    sourceLayer.add.placedData.filterFX.v.filterFXList.v == null ||
+    sourceLayer.add.placedData.filterFX.v.filterFXList.v[event.filterIndex] == null
+  ) return;
   const placedDataJsonBefore = JSON.stringify(sourceLayer.add.placedData);
   const placedDataClone = JSON.parse(placedDataJsonBefore);
   placedDataClone.filterFX.v.filterFXList.v.splice(event.filterIndex, 1);
@@ -518,6 +528,16 @@ function moveSingleSmartFilter(event, destLayer, placedDataClone, placedDataJson
 function handleMoveSmartFilter(event, dispatcher, doc) {
   const sourceLayer = doc.layers[event.sourceLayerIndex];
   const destLayer = doc.layers[event.destinationLayerIndex];
+  if (
+    sourceLayer == null ||
+    destLayer == null ||
+    sourceLayer.add == null ||
+    sourceLayer.add.placedData == null ||
+    sourceLayer.add.placedData.filterFX == null ||
+    sourceLayer.add.placedData.filterFX.v == null ||
+    sourceLayer.add.placedData.filterFX.v.filterFXList == null ||
+    sourceLayer.add.placedData.filterFX.v.filterFXList.v == null
+  ) return;
   const lockStateEntries = [];
   if (sourceLayer != destLayer && destLayer.add.placedData == null) {
     showToast("Target layer is not a smart object!");
@@ -558,6 +578,7 @@ function handleMoveSmartFilter(event, dispatcher, doc) {
 
 function handleToggleRasterMaskEnabled(event, dispatcher, doc, panelContext, appData, eventCode, layerIndex, targetLayer) {
   const mask = targetLayer.getMask();
+  if (mask == null) return;
   const historyEntry = createHistoryEntry(
     mask.enabled ? "layer.unlinkRasterMask" : "layer.linkRasterMask",
     this,
@@ -579,6 +600,7 @@ function handleToggleRasterMaskEnabled(event, dispatcher, doc, panelContext, app
 
 function handleToggleVectorMaskEnabled(event, dispatcher, doc, panelContext, appData, eventCode, layerIndex, targetLayer) {
   const mask = targetLayer.add.vmsk;
+  if (mask == null) return;
   const historyEntry = createHistoryEntry(
     mask.enabled ? "layer.unlinkVectorMask" : "layer.linkVectorMask",
     this,

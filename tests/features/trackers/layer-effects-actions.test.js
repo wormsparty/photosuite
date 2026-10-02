@@ -132,6 +132,46 @@ describe("features/trackers/layer-effects-actions.js", () => {
     assert.equal(doc.history.length, 0);
   });
 
+  it("ignores mask enable toggles when the selected raster layer has no mask", () => {
+    const tracker = new TrackerRegistry.LayerEffectsTracker();
+    const layer = makeLayer({
+      getMask() { return null; },
+      add: {},
+    });
+    const doc = makeDoc([layer]);
+
+    assert.doesNotThrow(() => tracker.handleInput(
+      { actionKind: Layer.toggleRasterMaskEnabled }, {}, doc, idleKeyboard(), {},
+    ));
+    assert.doesNotThrow(() => tracker.handleInput(
+      { actionKind: Layer.toggleVectorMaskEnabled }, {}, doc, idleKeyboard(), {},
+    ));
+    assert.equal(doc.history.length, 0);
+  });
+
+  it("ignores smart-filter delete and move actions without a filter stack", () => {
+    const tracker = new TrackerRegistry.LayerEffectsTracker();
+    const layer = makeLayer({ add: {} });
+    const doc = makeDoc([layer]);
+
+    assert.doesNotThrow(() => tracker.handleInput(
+      { actionKind: Layer.deleteSmartFilter, sourceLayerIndex: 0, filterIndex: 0 },
+      {}, doc, idleKeyboard(), {},
+    ));
+    assert.doesNotThrow(() => tracker.handleInput(
+      {
+        actionKind: Layer.moveSmartFilter,
+        sourceLayerIndex: 0,
+        destinationLayerIndex: 0,
+        sourceFilterIndex: 0,
+        insertFilterIndex: 0,
+        keepSourceOnCopy: false,
+      },
+      {}, doc, idleKeyboard(), {},
+    ));
+    assert.equal(doc.history.length, 0);
+  });
+
   it("opacity byte 128 serializes to 50 percent on the action descriptor", () => {
     const tracker = new TrackerRegistry.LayerEffectsTracker();
     tracker.track = () => {};
