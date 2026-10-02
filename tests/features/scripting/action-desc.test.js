@@ -158,10 +158,17 @@ describe("features/scripting/action-desc.js", () => {
       ] },
     ];
     const dispatched = [];
-    ActionDescUtil.playActionSetSteps({}, actionSets, "Action", "Set", {
-      dispatch(event) { dispatched.push(event.data.uf); },
-    });
+    const messages = [];
+    installToastPainter((message) => messages.push(message));
+    try {
+      ActionDescUtil.playActionSetSteps({}, actionSets, "Action", "Set", {
+        dispatch(event) { dispatched.push(event.data.uf); },
+      });
+    } finally {
+      installToastPainter(null);
+    }
     assert.deepEqual(dispatched, []);
+    assert.deepEqual(messages, ['Several actions are named "Action" in set "Set"; none was played.']);
   });
 
   it("a nested Play dispatches a unique target and leaves an ambiguous target untouched", () => {
@@ -255,9 +262,16 @@ describe("features/scripting/action-desc.js", () => {
       },
     };
 
-    ActionDescUtil.playActionSetSteps({}, actionSets, "A", "Set", dispatcher);
+    const messages = [];
+    installToastPainter((message) => messages.push(message));
+    try {
+      ActionDescUtil.playActionSetSteps({}, actionSets, "A", "Set", dispatcher);
+    } finally {
+      installToastPainter(null);
+    }
     assert.equal(nestedCalls, 2);
     assert.deepEqual(dispatched, ["a-before", "b-before", "b-after", "a-after"]);
+    assert.deepEqual(messages, ['Action "A" plays itself; the nested Play was skipped.']);
   });
 
   it("plays an acyclic nested chain in order", () => {
@@ -308,9 +322,16 @@ describe("features/scripting/action-desc.js", () => {
     const dispatched = [];
     const dispatcher = { dispatch(event) { dispatched.push(event.data.uf); } };
 
-    assert.doesNotThrow(() => ActionDescUtil.playActionSetSteps(doc, actionSets, "Loop", "Set", dispatcher));
-    assert.equal(conditionChecks, 1024);
+    const messages = [];
+    installToastPainter((message) => messages.push(message));
+    try {
+      assert.doesNotThrow(() => ActionDescUtil.playActionSetSteps(doc, actionSets, "Loop", "Set", dispatcher));
+    } finally {
+      installToastPainter(null);
+    }
+    assert.equal(conditionChecks, ActionDescUtil.maxRecordedPlaybackSteps);
     assert.deepEqual(dispatched, []);
+    assert.deepEqual(messages, [`Action playback stopped after ${ActionDescUtil.maxRecordedPlaybackSteps} steps.`]);
     ActionDescUtil.playActionSetSteps(doc, actionSets, "Later", "Set", dispatcher);
     assert.deepEqual(dispatched, ["later-step"]);
   });
@@ -373,7 +394,8 @@ describe("features/scripting/action-desc.js", () => {
     assert.deepEqual(dispatched, ["before-32", "after-32"]);
   });
 
-  it("shares the 1024-step budget across nested playback and resets it afterward", () => {
+  it("shares the step budget across nested playback and resets it afterward", () => {
+    const limit = ActionDescUtil.maxRecordedPlaybackSteps;
     const actionSets = [{ name: "Set", children: [
       { name: "Caller", children: [
         { enabled: true, uf: "before" },
@@ -382,7 +404,7 @@ describe("features/scripting/action-desc.js", () => {
         } },
         { enabled: true, uf: "after" },
       ] },
-      { name: "Child", children: Array.from({ length: 1024 }, (_, index) => ({
+      { name: "Child", children: Array.from({ length: limit }, (_, index) => ({
         enabled: true, uf: `child-${index}`,
       })) },
     ] }];
@@ -396,10 +418,10 @@ describe("features/scripting/action-desc.js", () => {
       },
     };
     ActionDescUtil.playActionSetSteps({}, actionSets, "Caller", "Set", dispatcher);
-    assert.deepEqual(dispatched, ["before", ...Array.from({ length: 1022 }, (_, index) => `child-${index}`)]);
+    assert.deepEqual(dispatched, ["before", ...Array.from({ length: limit - 2 }, (_, index) => `child-${index}`)]);
     dispatched.length = 0;
     ActionDescUtil.playActionSetSteps({}, actionSets, "Child", "Set", dispatcher);
-    assert.deepEqual(dispatched, Array.from({ length: 1024 }, (_, index) => `child-${index}`));
+    assert.deepEqual(dispatched, Array.from({ length: limit }, (_, index) => `child-${index}`));
   });
 
   it("expands a true conditional in order and leaves a false conditional untouched", () => {

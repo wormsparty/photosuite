@@ -150,14 +150,23 @@ ActionDescUtil.buildSetLayerPropertyAction = function(propertyKey, propertyValue
 // A recorded action can invoke another action synchronously. Share the limit
 // across that entire dispatch chain, including conditional step expansion.
 const activeActionPlaybacks = new WeakMap();
-const maxRecordedPlaybackSteps = 1024;
 const maxNestedActionDepth = 32;
+// Large enough for long recorded actions; it only stops runaway self-expansion.
+ActionDescUtil.maxRecordedPlaybackSteps = 10000;
+function stopPlayback(playback, message) {
+  if (playback.stopped) return;
+  playback.stopped = true;
+  showToast(message);
+}
 ActionDescUtil.playActionSetSteps = function(doc, actionSets, setIndex, stepIndex, dispatcher, actionPath) {
   const historyEvent = new AppEvent(EventType.historyGrouped, true);
   const stepStack = [];
   let action;
   if (actionPath === undefined) {
     action = ActionDescUtil.findActionInSet(actionSets, setIndex, stepIndex);
+    if (!action && ActionDescUtil.isAmbiguousActionName(actionSets, setIndex, stepIndex)) {
+      showToast("Several actions are named \"" + setIndex + "\" in set \"" + stepIndex + "\"; none was played.");
+    }
   } else {
     const [setPosition, actionPosition] = Array.isArray(actionPath) ? actionPath : [];
     action = Number.isInteger(setPosition) && Number.isInteger(actionPosition) &&
@@ -167,13 +176,25 @@ ActionDescUtil.playActionSetSteps = function(doc, actionSets, setIndex, stepInde
   }
   if (!action || !dispatcher) return;
   const existingPlayback = activeActionPlaybacks.get(dispatcher);
-  const playback = existingPlayback || { active: new Set(), remaining: maxRecordedPlaybackSteps };
-  if (playback.active.has(action) || playback.active.size >= maxNestedActionDepth || playback.remaining <= 0) return;
+  const playback = existingPlayback || { active: new Set(), remaining: ActionDescUtil.maxRecordedPlaybackSteps, stopped: false };
+  if (playback.active.has(action)) {
+    stopPlayback(playback, "Action \"" + action.name + "\" plays itself; the nested Play was skipped.");
+    return;
+  }
+  if (playback.active.size >= maxNestedActionDepth) {
+    stopPlayback(playback, "Actions are nested more than " + maxNestedActionDepth + " levels deep; the nested Play was skipped.");
+    return;
+  }
+  if (playback.remaining <= 0) return;
   if (!existingPlayback) activeActionPlaybacks.set(dispatcher, playback);
   playback.active.add(action);
   try {
     for (let pushIdx = action.children.length - 1; pushIdx >= 0; pushIdx--) stepStack.push(action.children[pushIdx]);
-    while (stepStack.length != 0 && playback.remaining > 0) {
+    while (stepStack.length != 0) {
+      if (playback.remaining <= 0) {
+        stopPlayback(playback, "Action playback stopped after " + ActionDescUtil.maxRecordedPlaybackSteps + " steps.");
+        break;
+      }
       const step = stepStack.pop();
       playback.remaining--;
       if (!step.enabled) continue;
@@ -223,6 +244,14 @@ ActionDescUtil.findActionInSet = function(actionSets, actionName, setName) {
     }
   }
   return action;
+};
+ActionDescUtil.isAmbiguousActionName = function(actionSets, actionName, setName) {
+  let matches = 0;
+  for (const set of actionSets) {
+    if (set.name != setName) continue;
+    for (const candidate of set.children) if (candidate.name == actionName && ++matches > 1) return true;
+  }
+  return false;
 };
 ActionDescUtil.collectActionStepsFromSet = function(actionSets, setIndex, stepIndex, outStack) {
   const steps = ActionDescUtil.findActionInSet(actionSets, setIndex, stepIndex)?.children;
