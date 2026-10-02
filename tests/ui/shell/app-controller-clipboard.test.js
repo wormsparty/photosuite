@@ -90,6 +90,25 @@ describe("ui/shell/app-controller-clipboard.js", () => {
     );
   });
 
+  it("Cut without a selection keeps the layer when the clipboard holds an older copy", () => {
+    function FakeController() {}
+    applyClipboardHandlers(FakeController);
+    const controller = Object.create(FakeController.prototype);
+    const dispatched = [];
+    const doc = {
+      selectedLayerIndices: [0],
+      selectionMask: null,
+      layers: [{ add: {} }],
+      getPaths() { return [[], []]; },
+    };
+    controller.toolRegistry = null;
+    controller.appData = { clipboardPixelPayload: { rect: {} } };
+    controller.getCurrentDoc = () => doc;
+    controller.dispatch = (event) => dispatched.push(event);
+    controller.cutSelectionOrLayers();
+    assert.deepEqual(dispatched, []);
+  });
+
   it("applyClipboardHandlers installs onHistoryGrouped that records skipActionRecording", () => {
     function FakeController() {}
     applyClipboardHandlers(FakeController);

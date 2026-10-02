@@ -28,14 +28,17 @@ export function menuWhenHasSelection(doc) {
   return { enabled: doc != null && doc.selectionMask != null };
 }
 
-/** Copy / copy merged — document must be open. */
-export function menuWhenCanCopy(doc) {
-  return menuWhenDocOpen(doc);
+/**
+ * Copy / copy merged — as in Photoshop, only with something to copy: a pixel
+ * selection, a selected path, or text being edited.
+ */
+export function menuWhenCanCopy(doc, appData) {
+  return { enabled: canCopyFromDocument(doc, appData) };
 }
 
-/** Cut — same gates as a successful copy (pixels, paths, text, or layer content). */
+/** Cut — the same gates as Copy; without a selection there is nothing to cut. */
 export function menuWhenCanCut(doc, appData) {
-  return { enabled: canCutFromDocument(doc, appData) };
+  return { enabled: canCopyFromDocument(doc, appData) };
 }
 
 /** Paste — system clipboard or internal buffers. */
@@ -90,13 +93,11 @@ export function menuWhenPanelVisible(panelId) {
 // Private helpers
 // ---------------------------------------------------------------------------
 
-function canCutFromDocument(doc, appData) {
+function canCopyFromDocument(doc, appData) {
   if (doc == null || doc.selectedLayerIndices.length === 0) return false;
   if (isActiveTextLayerCuttable(doc, appData)) return true;
   if (doc.selectionMask != null) return true;
-  if (doc.selectedLayerIndices.length > 1) return true;
-  if (hasPathSelection(doc)) return true;
-  return hasLayerPixelContent(doc.layers[doc.selectedLayerIndices[0]]);
+  return hasPathSelection(doc);
 }
 
 function isActiveTextLayerCuttable(doc, appData) {
@@ -108,10 +109,6 @@ function isActiveTextLayerCuttable(doc, appData) {
 function hasPathSelection(doc) {
   const paths = doc.getPaths();
   return paths[1].length !== 0;
-}
-
-function hasLayerPixelContent(layer) {
-  return layer != null && (layer.pixelContent > 0 || layer.buffer != null);
 }
 
 function hasPasteableClipboard(appData) {

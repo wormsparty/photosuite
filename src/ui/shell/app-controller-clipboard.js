@@ -31,6 +31,7 @@ import { copyPixels, scaleRgbaAlphaByMask } from "../../engine/compositing/pixel
 
 /** Return value from copySelectionToClipboard when a path selection was copied. */
 export const COPY_RESULT_PATH = 1;
+export const COPY_RESULT_PIXELS = 2;
 
 /**
  * Panel types that map 1:1 onto appData preset store arrays (same order).
@@ -91,7 +92,9 @@ export function applyClipboardHandlers(AppController) {
       dispatchPathCut(this);
       return
     }
-    if (this.appData.clipboardPixelPayload == null) return;
+    // Only clear pixels that this command copied; an older clipboard payload
+    // must not turn a selection-less Cut into a deletion.
+    if (copyKind != COPY_RESULT_PIXELS) return;
     const cutEvent = new AppEvent(EventType.historyGrouped);
     cutEvent.data = { uf: "delete" };
     this.dispatch(cutEvent);
@@ -116,6 +119,7 @@ export function applyClipboardHandlers(AppController) {
     const extracted = extractPixelCopyPayload(doc, activeLayer, copyFullDoc);
     if (extracted == null) return;
     storePixelClipboardPayload(this, appData, extracted.pixelBuffer, extracted.copyRect, doc);
+    return COPY_RESULT_PIXELS;
   };
 
   AppController.prototype.pasteFromInternalClipboard = function(skipInternalClipboard, pasteIntoLayerSequence) {

@@ -52,11 +52,7 @@ describe("ui/menu/menu-bar-predicates.js", () => {
     assert.deepEqual(menuWhenHasSelection({ selectionMask: null }), { enabled: false });
   });
 
-  it("menuWhenCanCopy delegates to doc open", () => {
-    assert.deepEqual(menuWhenCanCopy({}), { enabled: true });
-  });
-
-  it("menuWhenCanCut gates on selection, mask, paths, and pixels", () => {
+  it("menuWhenCanCut and menuWhenCanCopy require a selection, a path or text, as in Photoshop", () => {
     const emptyDoc = {
       selectedLayerIndices: [0],
       selectionMask: null,
@@ -66,6 +62,8 @@ describe("ui/menu/menu-bar-predicates.js", () => {
       layers: [{ add: {}, pixelContent: 0, buffer: null }],
     };
     assert.deepEqual(menuWhenCanCut(emptyDoc, {}), { enabled: false });
+    assert.deepEqual(menuWhenCanCopy(emptyDoc, {}), { enabled: false });
+    assert.deepEqual(menuWhenCanCopy({ ...emptyDoc, selectionMask: {} }, {}), { enabled: true });
     assert.deepEqual(menuWhenCanCut({ ...emptyDoc, selectionMask: {} }, {}), { enabled: true });
     assert.deepEqual(
       menuWhenCanCut({
@@ -81,8 +79,9 @@ describe("ui/menu/menu-bar-predicates.js", () => {
         ...emptyDoc,
         layers: [{ add: {}, pixelContent: 1, buffer: null }],
       }, {}),
-      { enabled: true }
+      { enabled: false }
     );
+    assert.deepEqual(menuWhenCanCut({ ...emptyDoc, selectedLayerIndices: [0, 1] }, {}), { enabled: false });
   });
 
   it("menuWhenCanPaste goldens", () => {
