@@ -35,6 +35,7 @@ function fixture(kind, cached) {
     activeChannels: kind === "extra channel" ? [0] : [], extraChannels: [mask],
     selectionMask: selection, pathViewport: { channelVisibility: [1, 1, 1] },
     pushHistory(entry) { this.entry = entry; }, markDirty() { this.needsComposite = true; },
+    ensureLayerEditableForTools() { return true; },
   };
   if (cached) layer.updatePixCache(doc, selection, true);
   return { mask, unrelatedMask, layer, selection, doc, tool: new PaintTool() };
@@ -214,5 +215,38 @@ describe("grayscale fill cache and history", () => {
       });
     }
   }
+
+  it("dispatches Edit Fill to a smart-filter mask without touching artwork", () => {
+    const { mask, layer, doc, tool } = fixture("smart-filter mask", false);
+    const originalMask = mask.channel.slice();
+    const originalArtwork = layer.buffer.slice();
+    const descriptor = {
+      Usng: { v: { FlCn: "Wht" } },
+      Opct: { v: { val: 50 } },
+      PrsT: { v: false },
+      Md: { v: { blendMode: "Nrml" } },
+    };
+    tool.handleInput({ actionKind: "fromAction", scriptActionPayload: { uf: "fill", actionDescriptor: descriptor } }, {}, doc, {}, { colorInt: 0, bgColor: 0 });
+    assert.deepEqual(Array.from(mask.channel), [20, 20, 20, 20, 20, 78, 137, 20]);
+    assert.deepEqual(layer.buffer, originalArtwork);
+    const filled = mask.channel.slice();
+    tool.undo(doc.entry.data, doc);
+    assert.deepEqual(mask.channel, originalMask);
+    tool.redo(doc.entry.data, doc);
+    assert.deepEqual(mask.channel, filled);
+  });
+
+  it("clears a smart-filter mask over its full surface without selection", () => {
+    const { mask, layer, doc, tool } = fixture("smart-filter mask", false);
+    doc.selectionMask = null;
+    const originalArtwork = layer.buffer.slice();
+    tool.handleInput({ actionKind: "fromAction", scriptActionPayload: { uf: "delete" } }, {}, doc, {}, { bgColor: 0 });
+    assert.deepEqual(Array.from(mask.channel), [0, 0, 0, 0, 0, 0, 0, 0]);
+    assert.deepEqual(layer.buffer, originalArtwork);
+    tool.undo(doc.entry.data, doc);
+    assert.deepEqual(Array.from(mask.channel), new Array(8).fill(20));
+    tool.redo(doc.entry.data, doc);
+    assert.deepEqual(Array.from(mask.channel), new Array(8).fill(0));
+  });
 
 });
