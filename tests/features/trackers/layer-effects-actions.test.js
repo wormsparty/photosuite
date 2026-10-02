@@ -81,6 +81,9 @@ function makeDoc(layers, extra = {}) {
     resolveLayerSelection() {
       return this.selectedLayerIndices.slice();
     },
+    getQuickMask() {
+      return null;
+    },
     expandParentGroups() {},
     ...extra,
   };
@@ -178,6 +181,54 @@ describe("features/trackers/layer-effects-actions.js", () => {
     ));
     assert.equal(doc.history.length, 0);
     assert.equal(doc.extraChannels[0].name, "Mask");
+  });
+
+  it("ignores malformed recorded extra-channel make and duplicate actions", () => {
+    for (const recordedActionPayload of [
+      { uf: "make", actionDescriptor: {} },
+      { uf: "duplicate", actionDescriptor: {} },
+      { uf: "make" },
+      null,
+    ]) {
+      const tracker = new TrackerRegistry.LayerEffectsTracker();
+      const channel = new Mask();
+      channel.name = "Existing";
+      const doc = makeDoc([makeLayer()], {
+        extraChannels: [channel],
+        activeChannels: [0],
+        selectionMask: null,
+      });
+
+      assert.doesNotThrow(() => tracker.handleInput(
+        {
+          actionKind: Layer.extraChannelOp,
+          operation: "fromAction",
+          recordedActionPayload,
+        }, {}, doc, idleKeyboard(), {},
+      ));
+      assert.equal(doc.extraChannels.length, 1);
+      assert.equal(doc.extraChannels[0].name, "Existing");
+      assert.deepEqual(doc.activeChannels, [0]);
+      assert.equal(doc.history.length, 0);
+    }
+  });
+
+  it("ignores unknown recorded extra-channel actions", () => {
+    const tracker = new TrackerRegistry.LayerEffectsTracker();
+    const doc = makeDoc([makeLayer()], {
+      extraChannels: [new Mask()],
+      activeChannels: [0],
+      selectionMask: null,
+    });
+
+    assert.doesNotThrow(() => tracker.handleInput(
+      {
+        actionKind: Layer.extraChannelOp,
+        operation: "fromAction",
+        recordedActionPayload: { uf: "unsupported", actionDescriptor: {} },
+      }, {}, doc, idleKeyboard(), {},
+    ));
+    assert.equal(doc.history.length, 0);
   });
 
   it("ignores filter-mask actions when the selected layer has no linked smart object", () => {

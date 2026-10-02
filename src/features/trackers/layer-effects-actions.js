@@ -657,10 +657,17 @@ function handleEditArtboard(event, dispatcher, doc, panelContext, appData, event
 }
 
 function applyExtraChannelFromAction(event, doc, extraChannelsAfter, activeChannelsAfter, selectionMaskAfter) {
-  const actionKind = event.recordedActionPayload.uf;
-  const actionDescriptor = event.recordedActionPayload.actionDescriptor;
+  const recordedActionPayload = event.recordedActionPayload;
+  if (recordedActionPayload == null || typeof recordedActionPayload != "object") {
+    return { selectionAfter: selectionMaskAfter, abort: true };
+  }
+  const actionKind = recordedActionPayload.uf;
+  const actionDescriptor = recordedActionPayload.actionDescriptor;
   let selectionAfter = selectionMaskAfter;
       if (actionKind == "make" || actionKind == "duplicate") {
+    if (actionDescriptor == null || typeof actionDescriptor != "object") {
+      return { selectionAfter, abort: true };
+    }
     let insertChannelIndex = extraChannelsAfter.length;
     let fromSelection = false;
     const invertChannel = false;
@@ -668,7 +675,10 @@ function applyExtraChannelFromAction(event, doc, extraChannelsAfter, activeChann
     const newChannelMask = new Mask();
         newChannelMask.name = "Alpha " + (insertChannelIndex + 1);
         if (actionKind == "make") {
-      const makeChannelDesc = actionDescriptor.Nw.v;
+          if (actionDescriptor.Nw == null || actionDescriptor.Nw.v == null) {
+            return { selectionAfter, abort: true };
+          }
+          const makeChannelDesc = actionDescriptor.Nw.v;
           newChannelMask.color = 255;
       activeChannelsAfter.length = 0;
       activeChannelsAfter.push(insertChannelIndex);
@@ -680,7 +690,14 @@ function applyExtraChannelFromAction(event, doc, extraChannelsAfter, activeChann
         selectionAfter = null;
         newChannelMask.indicatorFlags = 1;
           }
-        } else {
+      } else {
+      if (actionDescriptor.null == null
+        || !Array.isArray(actionDescriptor.null.v)
+        || actionDescriptor.null.v.length == 0
+        || actionDescriptor.null.v[0] == null
+        || actionDescriptor.null.v[0].v == null) {
+        return { selectionAfter, abort: true };
+      }
       const channelRef = actionDescriptor.null.v[0].v;
       if (channelRef.keyID == "fsel") fromSelection = true;
           else {
@@ -724,6 +741,7 @@ function applyExtraChannelFromAction(event, doc, extraChannelsAfter, activeChann
     extraChannelsAfter[activeChannelsAfter[0]] = activeChannel.clone();
     extraChannelsAfter[activeChannelsAfter[0]].active = false;
   }
+  else return { selectionAfter, abort: true };
   return { selectionAfter, abort: false };
 }
 
