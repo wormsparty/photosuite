@@ -300,6 +300,37 @@ it("red-eye channel payload matches the setChannelData {bounds, hslShift} contra
     assert.deepEqual(layer.buffer, originalBuffer);
   });
 
+  it("paste onto an empty transparency-locked layer keeps its pixels and history", () => {
+    const layer = new Layer();
+    layer.rect = new Rect(0, 0, 0, 0);
+    layer.buffer = allocBuffer(1);
+    layer.add.lspf = 1;
+    const history = [];
+    const doc = {
+      width: 2,
+      height: 2,
+      layers: [layer],
+      selectedLayerIndices: [0],
+      activeChannels: [],
+      extraChannels: [],
+      selectionMask: null,
+      pathViewport: { channelVisibility: [1, 1, 1] },
+      root: { getExpandedDirtyRect: (rect) => rect },
+      markDirty() {},
+      pushHistory(entry) { history.push(entry); },
+    };
+    const tool = new BrushTool();
+    const pasted = Uint8Array.from([0, 0, 255, 255]);
+    tool.capturePaintSourceBuffers(doc);
+    layer.buffer = pasted.slice();
+    layer.rect = new Rect(1, 1, 1, 1);
+    tool.finish(doc, new Rect(1, 1, 1, 1), "clipboard.paste", true);
+
+    assert.equal(history.length, 1, "the paste must remain undoable");
+    assert.deepEqual(layer.rect, new Rect(1, 1, 1, 1));
+    assert.deepEqual(Array.from(layer.buffer), Array.from(pasted));
+  });
+
   it("transparency-locked brush still paints and records history over opaque pixels", () => {
     const layer = new Layer();
     layer.rect = new Rect(0, 0, 2, 2);

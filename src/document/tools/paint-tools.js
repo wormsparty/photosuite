@@ -846,7 +846,10 @@ PaintTool.prototype.finish = function(doc, dirtyRect, historyLabelKey, clearSele
     maskOrContentTarget = paintTarget.maskTarget,
     contentRect = maskOrContentTarget ? maskOrContentTarget.rect : targetLayer.rect,
     snapshotPixelBuffer;
-  if (pixelContentKind <= 0 && targetLayer.isLockBitSet(0)) {
+  // A transparency-locked stroke over fully transparent pixels changes nothing.
+  // Paste (clearSelectionAfter) replaces empty layer content explicitly and
+  // must keep its result and history.
+  if (pixelContentKind <= 0 && targetLayer.isLockBitSet(0) && !clearSelectionAfter) {
     const coveredRect = dirtyRect.intersect(this.sourceSampleRect);
     let hasPaintablePixel = false;
     for (let y = coveredRect.y; y < coveredRect.y + coveredRect.height && !hasPaintablePixel; y++) {
