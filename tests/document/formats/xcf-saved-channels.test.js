@@ -21,7 +21,7 @@ const u32 = value => { const bytes = Buffer.alloc(4); bytes.writeUInt32BE(value)
 const prop = (type, payload = Buffer.alloc(0)) => Buffer.concat([u32(type), u32(payload.length), payload]);
 const name = value => { const bytes = Buffer.from(value + "\0"); return Buffer.concat([u32(bytes.length), bytes]); };
 
-// Two tiny v003 channels: a named saved channel and the active selection.
+// Three tiny v003 channels: two distinct saved channels and the active selection.
 // Compression 1 uses a two-pixel literal run, so both pixel positions matter.
 function fixture() {
   const header = Buffer.concat([
@@ -29,9 +29,10 @@ function fixture() {
   ]);
   const entries = [
     { title: "Saved alpha", values: [89, 193], selection: false },
+    { title: "Saved detail", values: [37, 211], selection: false },
     { title: "Selection", values: [255, 0], selection: true },
   ];
-  let offset = header.length + 4 * 4;
+  let offset = header.length + 5 * 4;
   const pointers = [];
   const objects = [];
   for (const entry of entries) {
@@ -50,17 +51,20 @@ function fixture() {
   return Buffer.concat([header, u32(0), ...pointers, u32(0), ...objects]);
 }
 
-it("imports a named XCF saved channel separately from selection and loads its pixels", () => {
+it("imports two distinct named XCF saved channels separately from selection and loads each pixel plane", () => {
   const bytes = fixture();
   const doc = { layers: [], extraChannels: [], activeChannels: [] };
   XCFParser.parse(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.length), doc);
   assert.deepEqual(Array.from(doc.selectionMask.channel.subarray(0, 2)), [255, 0]);
-  assert.equal(doc.extraChannels.length, 1);
-  assert.equal(doc.extraChannels[0].name, "Saved alpha");
+  assert.equal(doc.extraChannels.length, 2);
+  assert.deepEqual(doc.extraChannels.map(channel => channel.name), ["Saved alpha", "Saved detail"]);
   assert.deepEqual(Array.from(doc.extraChannels[0].channel.subarray(0, 2)), [89, 193]);
-  const loaded = loadChannelAsSelectionMask(doc, -5);
-  assert.deepEqual([loaded.rect.x, loaded.rect.y, loaded.rect.width, loaded.rect.height], [0, 0, 2, 1]);
-  assert.deepEqual(Array.from(loaded.channel.subarray(0, 2)), [89, 193]);
+  assert.deepEqual(Array.from(doc.extraChannels[1].channel.subarray(0, 2)), [37, 211]);
+  for (const [index, expected] of [[-5, [89, 193]], [-6, [37, 211]]]) {
+    const loaded = loadChannelAsSelectionMask(doc, index);
+    assert.deepEqual([loaded.rect.x, loaded.rect.y, loaded.rect.width, loaded.rect.height], [0, 0, 2, 1]);
+    assert.deepEqual(Array.from(loaded.channel.subarray(0, 2)), expected);
+  }
 });
 
 it("edits an imported saved channel under the imported selection with Undo/Redo", () => {
@@ -91,5 +95,41 @@ it("edits an imported saved channel under the imported selection with Undo/Redo"
   assert.deepEqual(Array.from(doc.extraChannels[0].getMaskForRect(new Rect(0, 0, 2, 1)).subarray(0, 2)), [89, 193]);
   tool.redo(doc.historyEntry.data, doc);
   assert.deepEqual(doc.extraChannels[0].getMaskForRect(new Rect(0, 0, 2, 1)).subarray(0, 2), filled);
+  assert.deepEqual(layer.buffer, artwork);
+});
+
+it("edits only the second imported saved channel and restores it through Undo/Redo", () => {
+  const bytes = fixture();
+  const doc = { layers: [], extraChannels: [], activeChannels: [] };
+  XCFParser.parse(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.length), doc);
+  const layer = new Layer();
+  layer.rect = new Rect(0, 0, 2, 1);
+  layer.buffer = Uint8Array.from([30, 40, 50, 255, 60, 70, 80, 255]);
+  doc.layers = [layer];
+  doc.selectedLayerIndices = [0];
+  doc.activeChannels = [1];
+  doc.pathViewport = { channelVisibility: [1, 1, 1] };
+  doc.pushHistory = entry => { doc.historyEntry = entry; };
+  doc.markDirty = () => {};
+  const artwork = layer.buffer.slice();
+  const firstChannel = doc.extraChannels[0].channel.slice();
+  const selection = doc.selectionMask.channel.slice();
+  const tool = new PaintTool();
+  tool.handleInput({ actionKind: "fromAction", scriptActionPayload: {
+    uf: "fill", actionDescriptor: { Usng: { v: { FlCn: "Blck" } }, Opct: { v: { val: 100 } } },
+  } }, null, doc, null, {});
+  const secondChannel = doc.extraChannels[1].getMaskForRect(new Rect(0, 0, 2, 1)).subarray(0, 2);
+  assert.deepEqual(Array.from(secondChannel), [0, 211]);
+  assert.equal(doc.historyEntry.data[0].layerIndex, -2);
+  assert.deepEqual(doc.extraChannels[0].channel, firstChannel);
+  assert.deepEqual(doc.selectionMask.channel, selection);
+  assert.deepEqual(layer.buffer, artwork);
+  doc.activeChannels = [];
+  tool.undo(doc.historyEntry.data, doc);
+  assert.deepEqual(Array.from(doc.extraChannels[1].getMaskForRect(new Rect(0, 0, 2, 1)).subarray(0, 2)), [37, 211]);
+  tool.redo(doc.historyEntry.data, doc);
+  assert.deepEqual(doc.extraChannels[1].getMaskForRect(new Rect(0, 0, 2, 1)).subarray(0, 2), secondChannel);
+  assert.deepEqual(doc.extraChannels[0].channel, firstChannel);
+  assert.deepEqual(doc.selectionMask.channel, selection);
   assert.deepEqual(layer.buffer, artwork);
 });
