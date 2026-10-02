@@ -66,11 +66,31 @@ describe("XCF dimensions and allocation budgets (unsafe claims are after-only)",
           bytes = mutate({ bytes }, offset, width, height);
         }
         const doc = document();
-        assert.throws(() => parse(bytes, doc), /decoded allocation budget exceeded/);
+        // These declarations fit the default budget; a 512 MiB budget proves
+        // rejection happens before either 256 MiB buffer is allocated.
+        const defaultBudget = XCFParser.maxDecodedBytes;
+        XCFParser.maxDecodedBytes = 512 * 1024 * 1024;
+        try {
+          assert.throws(() => parse(bytes, doc), /decoded allocation budget exceeded/);
+        } finally {
+          XCFParser.maxDecodedBytes = defaultBudget;
+        }
         assert.equal(doc.buffer, undefined);
         assert.equal(doc.createdLayers[0].buffer, null);
       });
     }
+    it(`applies the configured budget across document and layer buffers (${idSize * 8}-bit)`, () => {
+      const tileScratchBytes = 64 * 64 * 8 * 4;
+      const defaultBudget = XCFParser.maxDecodedBytes;
+      assert.equal(defaultBudget, 2 * 1024 * 1024 * 1024);
+      XCFParser.maxDecodedBytes = tileScratchBytes + 4;
+      try {
+        assert.throws(() => parse(fixture({ idSize }).bytes), /decoded allocation budget exceeded/);
+      } finally {
+        XCFParser.maxDecodedBytes = defaultBudget;
+      }
+      assert.deepEqual(Array.from(parse(fixture({ idSize }).bytes).layers[0].buffer), [23, 61, 107, 255]);
+    });
     it(`retains exact 65×65 pixels across all four edge tiles (${idSize * 8}-bit)`, () => {
       const doc = parse(fixture({ idSize, width: 65, height: 65 }).bytes);
       assert.equal(doc.width, 65); assert.equal(doc.height, 65);

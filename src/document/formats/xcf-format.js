@@ -21,7 +21,10 @@ const MAX_IMAGE_DIMENSION = 16384;
 const MAX_IMAGE_PIXELS = 8192 * 8192;
 // Include retained pixels and temporary planar/interleaved coexistence. Leave room
 // for the bounded tile scratch buffers, independently of compressed file size.
-const MAX_DECODED_BYTES = 512 * 1024 * 1024;
+// The budget covers every layer: 2 GiB admits a maximum-size document with a
+// few full layers, or a typical multi-layer photo, while still rejecting files
+// whose small tile data declares an unbounded total.
+const DEFAULT_MAX_DECODED_BYTES = 2 * 1024 * 1024 * 1024;
 const TILE_SCRATCH_BYTES = TILE_SIZE * TILE_SIZE * 8 * 4;
 
 function validateDimensions(width, height) {
@@ -32,7 +35,7 @@ function validateDimensions(width, height) {
 }
 
 function reserveDecodedBytes(budget, byteLength) {
-  if (byteLength > MAX_DECODED_BYTES - TILE_SCRATCH_BYTES - budget.used) {
+  if (byteLength > budget.limit - TILE_SCRATCH_BYTES - budget.used) {
     throw new RangeError("xcf: decoded allocation budget exceeded");
   }
   budget.used += byteLength;
@@ -127,7 +130,7 @@ function parse(arrayBuffer, doc) {
   doc.height = BinaryUtils.readUint32BE(bytes, offset);
   offset += 4;
   validateDimensions(doc.width, doc.height);
-  var budget = { used: 0 };
+  var budget = { used: 0, limit: XCFParser.maxDecodedBytes };
   reserveDecodedBytes(budget, doc.width * doc.height * 4);
   var colorMode = BinaryUtils.readUint32BE(bytes, offset);
   offset += 4;
@@ -825,6 +828,9 @@ function readParasiteMap(bytes, offset, endOffset) {
   return parasites;
 }
 
-const XCFParser = { parse, parseTextParasite, parseSExprTokens, channelCountForBitDepth, resolveGimpFontName };
+const XCFParser = {
+  parse, parseTextParasite, parseSExprTokens, channelCountForBitDepth, resolveGimpFontName,
+  maxDecodedBytes: DEFAULT_MAX_DECODED_BYTES,
+};
 
 export { XCFParser };
