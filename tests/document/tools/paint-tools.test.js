@@ -109,11 +109,33 @@ describe("document/tools/paint-tools.js", () => {
     tool.pushPaintHistory = (_doc, _redo, _label, layerIndex, contentKind, rect, buffer) => {
       history = { layerIndex, contentKind, rect, buffer };
     };
-    tool.applyScriptedDelete(doc, -1, undefined, { bgColor: 0 });
+    tool.handleInput({ actionKind: "fromAction", scriptActionPayload: { uf: "delete" } },
+      null, doc, null, { bgColor: 0 });
     assert.deepEqual(history.layerIndex, -1);
     assert.equal(history.contentKind, 1);
     assert.deepEqual([history.rect.x, history.rect.y, history.rect.width, history.rect.height], [1, 2, 3, 2]);
     assert.deepEqual(Array.from(history.buffer.subarray(0, 6)), new Array(6).fill(0));
+  });
+
+  it("ignores Edit Clear with malformed active extra-channel references", () => {
+    for (const activeChannels of [[-1], [1], [0.5], [0, 0]]) {
+      const mask = new Mask();
+      mask.rect = new Rect(0, 0, 2, 1);
+      mask.channel = Uint8Array.from([20, 40]);
+      const doc = {
+        width: 2, height: 1, layers: [], selectedLayerIndices: [],
+        activeChannels, extraChannels: [mask], selectionMask: null,
+        ensureLayerEditableForTools() { throw new Error("unexpected layer edit check"); },
+      };
+      const tool = new PaintTool();
+      let historyCount = 0;
+      tool.pushPaintHistory = () => { historyCount++; };
+      assert.doesNotThrow(() => tool.handleInput({
+        actionKind: "fromAction", scriptActionPayload: { uf: "delete" },
+      }, null, doc, null, { bgColor: 0 }), `activeChannels=${activeChannels}`);
+      assert.deepEqual(Array.from(mask.channel), [20, 40]);
+      assert.equal(historyCount, 0);
+    }
   });
 
   it("clears the full raster layer when no selection exists", () => {

@@ -242,6 +242,16 @@ PaintTool.buildFillAction = function(fillContentKind, blendMode, opacity, colorD
 PaintTool.prototype.handleInput = function(event, dispatcher, doc, keyboard, pointerState) {
   this.appDispatcher = dispatcher;
   var activeChannelCount = doc.activeChannels.length;
+  if (activeChannelCount != 0) {
+    var activeChannelSet = new Set(doc.activeChannels);
+    if (!Array.isArray(doc.extraChannels)
+      || activeChannelSet.size != activeChannelCount
+      || !doc.activeChannels.every((channelIndex) =>
+        Number.isInteger(channelIndex)
+        && channelIndex >= 0
+        && channelIndex < doc.extraChannels.length
+        && doc.extraChannels[channelIndex] != null)) return;
+  }
   if (activeChannelCount == 0 && !doc.ensureLayerEditableForTools()) return;
   var targetLayerIndex = activeChannelCount != 0 ? -1 - doc.activeChannels[0] : doc.selectedLayerIndices[0],
     targetLayer = doc.layers[targetLayerIndex];
