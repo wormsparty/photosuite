@@ -233,6 +233,7 @@ MoveTool.prototype.handleInput = function(event, dispatcher, doc, keyboard, appD
       deltaY = Math.round(event.translateDeltaY);
     this.accumulatedDelta.setXY(deltaX, deltaY);
     this.beginPointerGesture(doc, dispatcher, keyboard, appData, false, event.layerIndex);
+    if (!this.isDragging) return;
     this.applyPointerDelta(doc, deltaX, deltaY);
     this.finishPointerGesture(doc, null, appData)
   } else if (eventKind == "gids" || eventKind == "gidsFromLayer") {

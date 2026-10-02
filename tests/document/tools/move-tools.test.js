@@ -62,6 +62,31 @@ describe("document/tools/move-tools.js", () => {
     assert.deepEqual(moveTool.getCursorStyle(), [0, 0, 0]);
   });
 
+  for (const lockBit of [2, 31]) {
+    it(`rejects translate input without mutation or exception for lock ${lockBit}`, () => {
+      const tool = new MoveTool();
+      const rect = new Rect(1, 2, 3, 1);
+      const doc = {
+        width: 8, height: 8, activeChannels: [], selectedLayerIndices: [0],
+        layers: [{ rect, add: {}, isLockBitSet: (bit) => bit === lockBit }],
+        resolveLayerSelection: () => [0],
+        history: [],
+      };
+      const previousAlert = globalThis.alert;
+      let alerts = 0;
+      globalThis.alert = () => alerts++;
+      try {
+        assert.doesNotThrow(() => tool.handleInput({ actionKind: "trsl", translateDeltaX: 2, translateDeltaY: -1 }, {}, doc, {}, {}));
+        assert.equal(alerts, 1);
+        assert.equal(tool.isDragging, false);
+        assert.deepEqual(rect, new Rect(1, 2, 3, 1));
+        assert.deepEqual(doc.history, []);
+      } finally {
+        globalThis.alert = previousAlert;
+      }
+    });
+  }
+
   it("distributeGuideSpacings redistributes segment start positions", () => {
     chainToolPrototypes();
     const spans = [[10, 20], [50, 20], [100, 20]];
