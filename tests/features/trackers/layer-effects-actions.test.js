@@ -10,6 +10,7 @@ installBrowserGlobals();
 
 let TrackerRegistry;
 let Layer;
+let Mask;
 
 before(async () => {
   ({ TrackerRegistry } = await import("../../../src/features/trackers/tracker-registry.js"));
@@ -18,6 +19,7 @@ before(async () => {
   );
   registerTrackers(TrackerRegistry);
   ({ Layer } = await import("../../../src/document/model/layer.js"));
+  ({ Mask } = await import("../../../src/document/model/layer-masks.js"));
 });
 
 function makeLayer(overrides = {}) {
@@ -90,6 +92,33 @@ function idleKeyboard() {
 }
 
 describe("features/trackers/layer-effects-actions.js", () => {
+  it("deletes selected extra channels without reordering the active-channel state", () => {
+    const tracker = new TrackerRegistry.LayerEffectsTracker();
+    const channels = ["Red", "Green", "Blue"].map((name) => {
+      const channel = new Mask();
+      channel.name = name;
+      return channel;
+    });
+    const doc = makeDoc([makeLayer()], {
+      extraChannels: channels,
+      activeChannels: [0, 2],
+      selectionMask: null,
+    });
+
+    tracker.handleInput(
+      {
+        actionKind: Layer.extraChannelOp,
+        operation: "fromAction",
+        recordedActionPayload: { uf: "delete", actionDescriptor: {} },
+      }, {}, doc, idleKeyboard(), {},
+    );
+
+    assert.deepEqual(doc.activeChannels, []);
+    assert.equal(doc.extraChannels.length, 1);
+    assert.equal(doc.extraChannels[0].name, "Green");
+    assert.deepEqual(doc.history[0].data.activeChannelsBefore, [0, 2]);
+  });
+
   it("ignores filter-mask actions when the selected layer has no linked smart object", () => {
     const tracker = new TrackerRegistry.LayerEffectsTracker();
     const layer = makeLayer({ getLinkedPlacedItem() { return null; } });
