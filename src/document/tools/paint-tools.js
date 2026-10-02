@@ -337,12 +337,15 @@ PaintTool.prototype.applyScriptedFill = function(doc, targetLayer, fillDescripto
 };
 /** Scripted Edit > Clear: erase the selected region of pixels, mask, or channel. */
 PaintTool.prototype.applyScriptedDelete = function(doc, targetLayerIndex, targetLayer, pointerState) {
-  var pixelContentKind = targetLayerIndex < 0 ? 1 : targetLayer.pixelContent,
-    selectionMask = doc.selectionMask,
-    clearBuffer;
-  if (selectionMask == null) return;
-  var maskOrSmartFilter = this.resolvePaintTarget(doc).maskTarget,
+  var paintTarget = this.resolvePaintTarget(doc),
+    pixelContentKind = paintTarget.pixelContentKind,
+    maskOrSmartFilter = paintTarget.maskTarget,
     sourceRect = pixelContentKind <= 0 ? targetLayer.rect : maskOrSmartFilter.rect,
+    selectionMask = doc.selectionMask == null ? {
+      rect: sourceRect.clone(),
+      channel: getWhiteBuffer(sourceRect.area())
+    } : doc.selectionMask,
+    clearBuffer,
     clearRect = pixelContentKind <= 0 ? selectionMask.rect.intersect(sourceRect) : selectionMask.rect.clone();
   if (clearRect.isEmpty()) return;
   var clearPixelCount = clearRect.area();
@@ -354,7 +357,7 @@ PaintTool.prototype.applyScriptedDelete = function(doc, targetLayerIndex, target
     maskOrSmartFilter.extend(clearRect);
     copyChannel(maskOrSmartFilter.channel, maskOrSmartFilter.rect, clearBuffer, clearRect)
   }
-  if (0 <= targetLayerIndex && targetLayer.checkPixelCache(doc, selectionMask)) {
+  if (0 <= targetLayerIndex && doc.selectionMask != null && targetLayer.checkPixelCache(doc, selectionMask)) {
     if (pixelContentKind <= 0) {
       fillBuffer(clearBuffer, 0);
       copyPixels(targetLayer.pixCache.layerBufferBackup, targetLayer.pixCache.layerRect, clearBuffer, clearRect)

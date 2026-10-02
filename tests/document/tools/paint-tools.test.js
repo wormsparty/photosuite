@@ -92,6 +92,49 @@ describe("document/tools/paint-tools.js", () => {
     });
   }
 
+  it("clears the full active extra channel when no selection exists", () => {
+    const mask = new Mask();
+    mask.rect = new Rect(1, 2, 3, 2);
+    mask.channel = new Uint8Array([20, 40, 80, 120, 160, 220]);
+    const layer = new Layer();
+    layer.pixelContent = 0;
+    layer.rect = new Rect(0, 0, 4, 4);
+    layer.buffer = new Uint8Array(4 * 4 * 4).fill(255);
+    const doc = {
+      width: 4, height: 4, layers: [layer], selectedLayerIndices: [0],
+      activeChannels: [0], extraChannels: [mask], selectionMask: null,
+    };
+    const tool = new PaintTool();
+    let history;
+    tool.pushPaintHistory = (_doc, _redo, _label, layerIndex, contentKind, rect, buffer) => {
+      history = { layerIndex, contentKind, rect, buffer };
+    };
+    tool.applyScriptedDelete(doc, -1, undefined, { bgColor: 0 });
+    assert.deepEqual(history.layerIndex, -1);
+    assert.equal(history.contentKind, 1);
+    assert.deepEqual([history.rect.x, history.rect.y, history.rect.width, history.rect.height], [1, 2, 3, 2]);
+    assert.deepEqual(Array.from(history.buffer.subarray(0, 6)), new Array(6).fill(0));
+  });
+
+  it("clears the full raster layer when no selection exists", () => {
+    const layer = new Layer();
+    layer.rect = new Rect(0, 0, 2, 1);
+    layer.buffer = Uint8Array.from([20, 40, 80, 255, 100, 120, 160, 255]);
+    const doc = {
+      width: 2, height: 1, layers: [layer], selectedLayerIndices: [0],
+      activeChannels: [], extraChannels: [], selectionMask: null,
+    };
+    const tool = new PaintTool();
+    let history;
+    tool.pushPaintHistory = (_doc, _redo, _label, layerIndex, contentKind, rect, buffer) => {
+      history = { layerIndex, contentKind, rect, buffer };
+    };
+    tool.applyScriptedDelete(doc, 0, layer, { bgColor: 0 });
+    assert.equal(history.layerIndex, 0);
+    assert.equal(history.contentKind, 0);
+    assert.deepEqual(Array.from(history.buffer), [20, 40, 80, 0, 100, 120, 160, 0]);
+  });
+
   it("registerPaintTools wires paint and gradient tool constructors", () => {
     chainToolPrototypes();
     const brushTool = new BrushTool();
