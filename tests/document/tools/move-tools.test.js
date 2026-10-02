@@ -10,6 +10,7 @@ let repeatOffsetForLayers;
 let restoreBrowserGlobals;
 let MoveTool;
 let ensureFormatLoaders;
+let Rect;
 
 function patchDomForInputHandler() {
   const createElement = globalThis.document.createElement.bind(globalThis.document);
@@ -28,6 +29,7 @@ function chainToolPrototypes() {
 
 before(async () => {
   restoreBrowserGlobals = installBrowserGlobals();
+  ({ Rect } = await import("../../../src/core/math/rect.js"));
   ({ ToolId } = await import("../../../src/document/model/tool-base.js"));
   await import("../../../src/engine/layer-system.js");
   patchDomForInputHandler();
@@ -71,6 +73,41 @@ describe("document/tools/move-tools.js", () => {
     chainToolPrototypes();
     const offsets = repeatOffsetForLayers([1, 2], 3, 4);
     assert.deepEqual(offsets, [3, 4, 3, 4]);
+  });
+
+  describe("alignment rejected by layer locks", () => {
+    for (const lockBit of [2, 31]) {
+      for (const alignMode of [0, 1, 2, 4, 5, 6]) {
+        it(`preserves selection for alignment ${alignMode} with lock ${lockBit}`, () => {
+          const tool = new MoveTool();
+          const selection = { rect: new Rect(1, 2, 3, 1), channel: new Uint8Array([64, 128, 255]) };
+          const layerRect = new Rect(0, 0, 3, 1);
+          const doc = {
+            selectionMask: selection,
+            selectedLayerIndices: [0],
+            activeChannels: [],
+            layers: [{ rect: layerRect, isLockBitSet: (bit) => bit === lockBit }],
+            resolveLayerSelection: () => [0],
+            history: [],
+          };
+          const previousAlert = globalThis.alert;
+          let alerts = 0;
+          globalThis.alert = () => alerts++;
+          try {
+            // Exercise both production alignment and production lock rejection.
+            tool.alignSelectedLayers(alignMode, {}, doc, {}, {});
+            assert.equal(alerts, 1);
+            assert.equal(tool.isDragging, false);
+            assert.equal(doc.selectionMask, selection);
+            assert.deepEqual([...selection.channel], [64, 128, 255]);
+            assert.deepEqual(layerRect, new Rect(0, 0, 3, 1));
+            assert.deepEqual(doc.history, []);
+          } finally {
+            globalThis.alert = previousAlert;
+          }
+        });
+      }
+    }
   });
 
   it("mergeLayerIndexLists appends unique coordinates per axis", () => {

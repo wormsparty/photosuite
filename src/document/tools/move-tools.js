@@ -283,7 +283,10 @@ MoveTool.prototype.alignSelectedLayers = function(alignMode, dispatcher, doc, ke
   doc.selectionMask = null;
   var alignBoundsRect = savedSelection ? savedSelection.rect : TransformToolBase.getSelectionRect(doc);
   this.beginPointerGesture(doc, dispatcher, keyboard, appData, false);
-  if (!this.isDragging) return;
+  if (!this.isDragging) {
+    doc.selectionMask = savedSelection;
+    return
+  }
   var selectedLayerIndices = this.selectedLayers,
     rootGroupSlotByLayer = [],
     rootGroupIndices = [],
