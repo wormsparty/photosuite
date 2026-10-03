@@ -27,7 +27,7 @@ export function sampleSelectionAtPoint(doc, samplePoint, wandOptions) {
     alert("No layer selected.");
     return null;
   }
-  if (samplePoint.x < 0 || samplePoint.x > doc.width || samplePoint.y < 0 || samplePoint.y > doc.height) return null;
+  if (samplePoint.x < 0 || samplePoint.x >= doc.width || samplePoint.y < 0 || samplePoint.y >= doc.height) return null;
   const fullDocRect = new Rect(0, 0, doc.width, doc.height);
   let compositeBuffer;
   if (maskOrChannel == null && fullDocRect.equals(layer.rect)) compositeBuffer = layer.buffer;

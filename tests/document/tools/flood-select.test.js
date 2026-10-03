@@ -13,9 +13,10 @@ installBrowserGlobals();
 let colorDistance;
 let minColorDistance;
 let readSampleColors;
+let sampleSelectionAtPoint;
 
 before(async () => {
-  ({ colorDistance, minColorDistance, readSampleColors } = await import(
+  ({ colorDistance, minColorDistance, readSampleColors, sampleSelectionAtPoint } = await import(
     "../../../src/document/tools/flood-select.js"
   ));
 });
@@ -47,5 +48,18 @@ describe("document/tools/flood-select.js", () => {
       readSampleColors(buffer, new Rect(0, 0, 2, 2), [new Point(0.5, 0.5)]),
       [[1, 2, 3, 255]],
     );
+  });
+
+  it("ignores a sample exactly on the right or bottom canvas edge", () => {
+    const buffer = new Uint8ClampedArray(2 * 2 * 4);
+    buffer.fill(255);
+    const doc = {
+      width: 2,
+      height: 2,
+      selectedLayerIndices: [0],
+      layers: [{ pixelContent: 0, add: { lsct: null }, rect: new Rect(0, 0, 2, 2), buffer }],
+    };
+    assert.equal(sampleSelectionAtPoint(doc, new Point(2, 0), [0, false, true]), null);
+    assert.equal(sampleSelectionAtPoint(doc, new Point(0, 2), [0, false, true]), null);
   });
 });
