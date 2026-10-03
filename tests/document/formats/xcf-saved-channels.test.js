@@ -65,7 +65,7 @@ const name = value => { const bytes = Buffer.from(value + "\0"); return Buffer.c
 
 // Three tiny v003 channels: two distinct saved channels and the active selection.
 // Compression 1 uses a two-pixel literal run, so both pixel positions matter.
-function fixture() {
+function fixture(visibility = null) {
   const header = Buffer.concat([
     Buffer.from("gimp xcf v003\0"), u32(2), u32(1), u32(0), prop(17, Buffer.from([1])), prop(0),
   ]);
@@ -77,8 +77,14 @@ function fixture() {
   let offset = header.length + 5 * 4;
   const pointers = [];
   const objects = [];
-  for (const entry of entries) {
-    const channel = Buffer.concat([u32(2), u32(1), name(entry.title), ...(entry.selection ? [prop(4)] : []), prop(0)]);
+  for (const [index, entry] of entries.entries()) {
+    const visible = visibility?.[index];
+    const channel = Buffer.concat([
+      u32(2), u32(1), name(entry.title),
+      ...(entry.selection ? [prop(4)] : []),
+      ...(visible == null ? [] : [prop(8, u32(visible))]),
+      prop(0),
+    ]);
     const hierarchy = offset + channel.length + 4;
     const level = hierarchy + 16;
     const tile = level + 16;
@@ -92,6 +98,15 @@ function fixture() {
   }
   return Buffer.concat([header, u32(0), ...pointers, u32(0), ...objects]);
 }
+
+it("imports saved XCF channel visibility for both shown and hidden channels", () => {
+  const bytes = fixture([1, 0]);
+  const doc = { layers: [], extraChannels: [], activeChannels: [] };
+  XCFParser.parse(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.length), doc);
+  assert.deepEqual(doc.extraChannels.map(channel => channel.active), [true, false]);
+  assert.deepEqual(Array.from(doc.extraChannels[0].channel.subarray(0, 2)), [89, 193]);
+  assert.deepEqual(Array.from(doc.extraChannels[1].channel.subarray(0, 2)), [37, 211]);
+});
 
 it("imports two distinct named XCF saved channels separately from selection and loads each pixel plane", () => {
   const bytes = fixture();

@@ -196,6 +196,9 @@ function parse(arrayBuffer, doc) {
       const savedChannel = new Mask();
       savedChannel.name = channel.name;
       savedChannel.color = 0;
+      if (channel.properties[XcfPropType.PROP_VISIBLE]) {
+        savedChannel.active = BinaryUtils.readUint32BE(channel.properties[XcfPropType.PROP_VISIBLE], 0) != 0;
+      }
       savedChannel.rect = new Rect(0, 0, doc.width, doc.height);
       savedChannel.channel = channel.channelPlane;
       if (!Array.isArray(doc.extraChannels)) doc.extraChannels = [];
