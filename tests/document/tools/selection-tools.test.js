@@ -54,6 +54,15 @@ describe("document/tools/selection-tools.js", () => {
     assert.equal(typeof SelectTool.resolveSelectionCombineMode, "function");
   });
 
+  it("Magic Wand samples the pointer pixel even when the cursor snaps to the canvas edge", () => {
+    const wand = new MagicWandTool();
+    const doc = { pathViewport: { screenToDocPoint: (x, y) => new Point(x, y) } };
+    wand.cursorPos = new Point(32, 24);
+    const action = wand.getSelection(doc, null, null, { x: 31.25, y: 23.25 });
+    assert.equal(action.actionDescriptor.T.v.Hrzn.v.val, 31);
+    assert.equal(action.actionDescriptor.T.v.Vrtc.v.val, 23);
+  });
+
   it("resolveSelectionCombineMode maps modifiers to modes", () => {
     chainToolPrototypes();
     const resolve = SelectTool.resolveSelectionCombineMode;

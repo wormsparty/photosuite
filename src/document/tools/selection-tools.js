@@ -793,7 +793,9 @@ MagicWandTool.prototype.onDragStart = function(doc, appData, keyboard, pointerSt
   this.finish(doc, appData, keyboard, pointerState);
 };
 MagicWandTool.prototype.getSelection = function(doc, appData, keyboard, pointerState) {
-  const cursorPos = this.cursorPos;
+  // A sampled pixel must use the pointer position. Guide snapping can move a
+  // click on the last pixel to the canvas boundary, outside the image.
+  const cursorPos = doc.pathViewport.screenToDocPoint(pointerState.x, pointerState.y);
   return buildMagicWandAtPointAction(new Point(Math.floor(cursorPos.x), Math.floor(cursorPos.y)), this.toolOptions.magicWandOptions);
 };
 
