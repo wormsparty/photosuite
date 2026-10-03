@@ -190,6 +190,38 @@ describe("document/tools/quick-select-session.js", () => {
     assert.ok(area < 120 * 120);
   });
 
+  it("does not wrap object crosshair marks across any edge of an offset layer", () => {
+    const width = 8;
+    const height = 8;
+    const layerRect = new Rect(4, 4, width, height);
+    const doc = {
+      selectedLayerIndices: [0],
+      layers: [{ rect: layerRect, buffer: new Uint8ClampedArray(width * height * 4) }],
+    };
+    const session = createQuickSelectSession(doc);
+    for (const key in session) quickSelectSession[key] = session[key];
+
+    // Each marquee overlaps two pixels of the layer. A crosshair arm may
+    // enter the layer, but its out-of-range centre must never alias a row.
+    for (const [side, shape, expectedForeground] of [
+      ["left", { x: 0, y: 5, width: 6, height: 6 }, []],
+      ["right", { x: 10, y: 5, width: 6, height: 6 }, [3 * width + 7]],
+      ["top", { x: 5, y: 0, width: 6, height: 6 }, []],
+      ["bottom", { x: 5, y: 10, width: 6, height: 6 }, [7 * width + 3]],
+    ]) {
+      seedObjectSelectionMask(shape);
+      const foreground = [];
+      quickSelectSession.brushMaskBuffer.forEach((value, index) => {
+        if (value === 255) foreground.push(index);
+      });
+      assert.deepEqual(foreground, expectedForeground, side);
+      if (side === "left") {
+        assert.ok(quickSelectSession.selectionMaskBuffer.every((value) => value === 0),
+          "a crosshair outside a uniform layer must not select unrelated pixels");
+      }
+    }
+  });
+
   // A selection the session did not make means its scribbles describe
   // something that is no longer on screen: stepping back through history is
   // the case that matters.

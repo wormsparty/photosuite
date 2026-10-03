@@ -287,10 +287,10 @@ export function seedObjectSelectionMask(shapeRect) {
   const maskHeight = maskRect.height;
   const leftEdge = shapeRect.x - maskRect.x;
   const rightEdge = leftEdge + shapeRect.width - 1;
-  const centerX = Math.max(leftEdge, Math.min(rightEdge, leftEdge + rightEdge >>> 1));
+  const centerX = Math.floor((leftEdge + rightEdge) / 2);
   const topEdge = shapeRect.y - maskRect.y;
   const bottomEdge = topEdge + shapeRect.height - 1;
-  const centerY = Math.max(topEdge, Math.min(bottomEdge, topEdge + bottomEdge >>> 1));
+  const centerY = Math.floor((topEdge + bottomEdge) / 2);
   const clipLeft = Math.max(leftEdge, 0);
   const clipRight = Math.min(rightEdge, maskWidth);
   const clipTop = Math.max(topEdge, 0);
@@ -310,8 +310,12 @@ export function seedObjectSelectionMask(shapeRect) {
   }
   const crosshairHalfWidth = Math.round(shapeRect.width * CROSSHAIR_INSET_RATIO);
   const crosshairHalfHeight = Math.round(shapeRect.height * CROSSHAIR_INSET_RATIO);
-  for (let x = Math.max(0, centerX - crosshairHalfWidth); x < Math.min(maskWidth, centerX + crosshairHalfWidth); x++) brushMaskBuffer[centerY * maskWidth + x] = 255;
-  for (let y = Math.max(0, centerY - crosshairHalfHeight); y < Math.min(maskHeight, centerY + crosshairHalfHeight); y++) brushMaskBuffer[y * maskWidth + centerX] = 255;
+  if (centerY >= 0 && centerY < maskHeight) {
+    for (let x = Math.max(0, centerX - crosshairHalfWidth); x < Math.min(maskWidth, centerX + crosshairHalfWidth); x++) brushMaskBuffer[centerY * maskWidth + x] = 255;
+  }
+  if (centerX >= 0 && centerX < maskWidth) {
+    for (let y = Math.max(0, centerY - crosshairHalfHeight); y < Math.min(maskHeight, centerY + crosshairHalfHeight); y++) brushMaskBuffer[y * maskWidth + centerX] = 255;
+  }
   recomputeQuickSelectSelection(sessionState, { windowRect: shapeRect });
   return {
     channel: sessionState.selectionMaskBuffer.slice(0),
