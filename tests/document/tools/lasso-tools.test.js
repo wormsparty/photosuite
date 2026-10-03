@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { describe, it, before, after } from "node:test";
 
 import { installBrowserGlobals } from "../../helpers/stub-browser-globals.js";
+import { Rect } from "../../../src/core/math/rect.js";
+import { EventType } from "../../../src/core/event-bus.js";
 
 let restoreBrowserGlobals;
 let ToolBase;
@@ -133,6 +135,64 @@ describe("document/tools/lasso-tools.js", () => {
       null,
     );
     assert.equal(outcome.label, "tools.lassoSelect");
+  });
+
+  it("commits a feathered freehand outline with soft edges and undoable history", async () => {
+    const { Point } = await import("../../../src/core/math/point.js");
+    const tool = new LassoTool();
+    const events = [];
+    const dispatcher = { dispatch(event) { events.push(event); } };
+    const history = [];
+    const appData = { extras: true, prefs: { showSelectionEdges: true }, snapEnabled: false };
+    const doc = {
+      width: 16, height: 16, selectionMask: null, dirty: false,
+      toolOverlayState: { overlayTransform: null },
+      pathViewport: {
+        zoomScale: 1, dimensionOverlay: null,
+        screenToDocPoint(x, y) { return new Point(x, y); },
+      },
+      pushHistory(entry) { history.push(entry); },
+    };
+    // Node has no canvas rasterizer. Supply a small hard mask only; the
+    // pointer trace, descriptor, feathering, and history paths stay real.
+    let tracedPath;
+    tool.bezierPathToSelectionMask = (path) => {
+      tracedPath = path;
+      const channel = new Uint8Array(8 * 8);
+      channel.fill(255);
+      return { rect: new Rect(4, 4, 8, 8), channel };
+    };
+
+    tool.syncToolbarWidget([0, 1, [16, true, true]], null, dispatcher);
+    tool.onMouseDown(doc, dispatcher, appData, NO_KEYS, pointerAt(4, 4, true));
+    for (const [x, y] of [[12, 4], [12, 12], [4, 12]]) {
+      tool.onMouseMove(doc, dispatcher, appData, NO_KEYS, pointerAt(x, y, true));
+    }
+    tool.onMouseUp(doc, dispatcher, appData, NO_KEYS, pointerAt(4, 12, false));
+
+    const gesture = events.find((event) => event.type === EventType.historyGrouped);
+    assert.ok(gesture);
+    assert.equal(gesture.data.actionDescriptor.T.v.classID, "Plgn");
+    assert.equal(gesture.data.actionDescriptor.Fthr.v.val, 1);
+    assert.equal(tool.polygonPathOverlay, null);
+    assert.equal(doc.toolOverlayState.overlayTransform, null);
+    tool.handleInput({ actionKind: "fromAction", scriptActionPayload: gesture.data }, dispatcher, doc, NO_KEYS, appData);
+
+    assert.deepEqual(tracedPath.coords, [4, 4, 12, 4, 12, 12, 4, 12]);
+    assert.deepEqual(tracedPath.commands, ["M", "L", "L", "L", "Z"]);
+    assert.equal(history.length, 1);
+    assert.equal(history[0].name, "tools.lassoSelect");
+    const selection = doc.selectionMask;
+    const at = (x, y) => selection.channel[(y - selection.rect.y) * selection.rect.width + x - selection.rect.x];
+    assert.ok(selection.rect.x < 4);
+    assert.ok(at(3, 8) > 0 && at(3, 8) < 255);
+    assert.equal(at(8, 8), 255);
+
+    tool.undo(history[0].data, doc);
+    assert.equal(doc.selectionMask, null);
+    tool.redo(history[0].data, doc);
+    assert.equal(doc.selectionMask, selection);
+    assert.ok(at(3, 8) > 0 && at(3, 8) < 255);
   });
 
   it("polygon lasso activity tracks its path overlay", () => {
