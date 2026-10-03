@@ -5,6 +5,7 @@ import { installBrowserGlobals } from "../../helpers/stub-browser-globals.js";
 import { Point } from "../../../src/core/math/point.js";
 import { Rect } from "../../../src/core/math/rect.js";
 import { makeElement } from "../../../src/core/dom.js";
+import { EventType } from "../../../src/core/event-bus.js";
 
 let ToolId;
 let restoreBrowserGlobals;
@@ -106,6 +107,45 @@ describe("document/tools/selection-tools.js", () => {
     const pts = SelectTool.buildPolygonSelectionAction(coords).actionDescriptor.T.v.Pts.v.arr;
     assert.deepEqual(pts[0].arr, [0, 10, 10]);
     assert.deepEqual(pts[1].arr, [0, 0, 10]);
+  });
+
+  it("commits a toolbar-feathered rectangle with soft mask bytes and undoable history", () => {
+    const tool = new RectSelectTool();
+    const events = [];
+    const dispatcher = { dispatch(event) { events.push(event); } };
+    const appData = { extras: true, prefs: { showSelectionEdges: true } };
+    const history = [];
+    const doc = {
+      width: 16, height: 16, selectionMask: null,
+      pushHistory(entry) { history.push(entry); },
+    };
+
+    tool.syncToolbarWidget([0, 1, [16, true, true]], null, dispatcher);
+    tool.appDispatcher = dispatcher;
+    tool.startPos = new Point(4, 4);
+    tool.cursorPos = new Point(12, 12);
+    tool.exceededDragThreshold = true;
+    tool.finish(doc, appData, null, null);
+
+    const gesture = events.find((event) => event.type === EventType.historyGrouped);
+    assert.ok(gesture);
+    assert.equal(gesture.data.actionDescriptor.Fthr.v.val, 1);
+    tool.handleInput({ actionKind: "fromAction", scriptActionPayload: gesture.data }, dispatcher, doc, null, appData);
+
+    assert.equal(history.length, 1);
+    assert.equal(history[0].name, "tools.rectangleSelect");
+    const selection = doc.selectionMask;
+    const at = (x, y) => selection.channel[(y - selection.rect.y) * selection.rect.width + x - selection.rect.x];
+    assert.ok(selection.rect.x < 4);
+    assert.ok(at(3, 8) > 0 && at(3, 8) < 255);
+    assert.equal(at(8, 8), 255);
+    assert.ok(at(4, 8) < 255);
+
+    tool.undo(history[0].data, doc);
+    assert.equal(doc.selectionMask, null);
+    tool.redo(history[0].data, doc);
+    assert.equal(doc.selectionMask, selection);
+    assert.ok(at(3, 8) > 0 && at(3, 8) < 255);
   });
 
   it("EllipseSelectTool.ellipseToBezierPath returns closed path overlay", () => {
