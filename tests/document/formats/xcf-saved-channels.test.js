@@ -59,6 +59,47 @@ it("duplicates a selected imported saved channel without changing the selection 
   assert.deepEqual(doc.extraChannels[2].channel, source.channel);
   assert.deepEqual(doc.selectionMask.channel, selection);
 });
+
+it("deletes only the selected imported saved channel and restores it through history", () => {
+  const bytes = fixture();
+  const doc = { layers: [], extraChannels: [], activeChannels: [] };
+  XCFParser.parse(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.length), doc);
+  const layer = new Layer();
+  layer.rect = new Rect(0, 0, 2, 1);
+  layer.buffer = Uint8Array.from([30, 40, 50, 255, 60, 70, 80, 255]);
+  doc.layers = [layer];
+  doc.selectedLayerIndices = [0];
+  doc.activeChannels = [1];
+  doc.pathViewport = { channelVisibility: [1, 1, 1] };
+  doc.markDirty = () => {};
+  doc.pushHistory = entry => { doc.historyEntry = entry; };
+  const first = doc.extraChannels[0];
+  const second = doc.extraChannels[1];
+  const selection = doc.selectionMask.channel.slice();
+  const artwork = layer.buffer.slice();
+  const tracker = new TrackerRegistry.LayerEffectsTracker();
+
+  tracker.handleInput({
+    actionKind: Layer.extraChannelOp,
+    operation: "fromAction",
+    recordedActionPayload: { uf: "delete", actionDescriptor: {} },
+  }, {}, doc, { isPressed: () => false }, {});
+  assert.deepEqual(doc.extraChannels, [first]);
+  assert.deepEqual(doc.activeChannels, []);
+  assert.deepEqual(doc.historyEntry.data.activeChannelsBefore, [1]);
+  assert.deepEqual(doc.selectionMask.channel, selection);
+  assert.deepEqual(layer.buffer, artwork);
+
+  tracker.undo(doc.historyEntry.data, doc);
+  assert.deepEqual(doc.extraChannels, [first, second]);
+  assert.deepEqual(doc.activeChannels, [1]);
+  assert.deepEqual(Array.from(doc.extraChannels[1].channel.subarray(0, 2)), [37, 211]);
+  tracker.redo(doc.historyEntry.data, doc);
+  assert.deepEqual(doc.extraChannels, [first]);
+  assert.deepEqual(doc.activeChannels, []);
+  assert.deepEqual(doc.selectionMask.channel, selection);
+  assert.deepEqual(layer.buffer, artwork);
+});
 after(() => restore?.());
 
 const u32 = value => { const bytes = Buffer.alloc(4); bytes.writeUInt32BE(value); return bytes; };
