@@ -225,3 +225,50 @@ it("edits only the second imported saved channel and restores it through Undo/Re
   assert.deepEqual(doc.selectionMask.channel, selection);
   assert.deepEqual(layer.buffer, artwork);
 });
+
+it("fills then clears one imported saved channel without changing its neighbors", () => {
+  const bytes = fixture();
+  const doc = { layers: [], extraChannels: [], activeChannels: [] };
+  XCFParser.parse(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.length), doc);
+  const layer = new Layer();
+  layer.rect = new Rect(0, 0, 2, 1);
+  layer.buffer = Uint8Array.from([30, 40, 50, 255, 60, 70, 80, 255]);
+  doc.layers = [layer];
+  doc.selectedLayerIndices = [0];
+  doc.activeChannels = [0];
+  doc.pathViewport = { channelVisibility: [1, 1, 1] };
+  const history = [];
+  doc.pushHistory = entry => history.push(entry);
+  doc.markDirty = () => {};
+  const otherChannel = doc.extraChannels[1].channel.slice();
+  const selection = doc.selectionMask.channel.slice();
+  const artwork = layer.buffer.slice();
+  const pixels = () => Array.from(doc.extraChannels[0].getMaskForRect(new Rect(0, 0, 2, 1)).subarray(0, 2));
+  const tool = new PaintTool();
+
+  tool.handleInput({ actionKind: "fromAction", scriptActionPayload: {
+    uf: "fill", actionDescriptor: { Usng: { v: { FlCn: "Blck" } }, Opct: { v: { val: 100 } } },
+  } }, null, doc, null, {});
+  assert.deepEqual(pixels(), [0, 193]);
+  tool.handleInput({ actionKind: "fromAction", scriptActionPayload: { uf: "delete" } },
+    null, doc, null, { bgColor: 0xffffff });
+  assert.deepEqual(pixels(), [255, 193]);
+  assert.equal(history.length, 2);
+  assert.deepEqual(history.map(entry => entry.data[0].layerIndex), [-1, -1]);
+  assert.deepEqual(doc.extraChannels[1].channel, otherChannel);
+  assert.deepEqual(doc.selectionMask.channel, selection);
+  assert.deepEqual(layer.buffer, artwork);
+
+  doc.activeChannels = [];
+  tool.undo(history[1].data, doc);
+  assert.deepEqual(pixels(), [0, 193]);
+  tool.undo(history[0].data, doc);
+  assert.deepEqual(pixels(), [89, 193]);
+  tool.redo(history[0].data, doc);
+  assert.deepEqual(pixels(), [0, 193]);
+  tool.redo(history[1].data, doc);
+  assert.deepEqual(pixels(), [255, 193]);
+  assert.deepEqual(doc.extraChannels[1].channel, otherChannel);
+  assert.deepEqual(doc.selectionMask.channel, selection);
+  assert.deepEqual(layer.buffer, artwork);
+});
