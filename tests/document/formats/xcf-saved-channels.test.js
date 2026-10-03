@@ -398,3 +398,53 @@ it("fills an imported saved channel through a fractional imported selection", ()
   assert.deepEqual(doc.selectionMask.channel, selection);
   assert.deepEqual(layer.buffer, artwork);
 });
+
+it("fills then clears an imported saved channel through a fractional imported selection", () => {
+  const bytes = fixture(null, [128, 64]);
+  const doc = { width: 2, height: 1, layers: [], extraChannels: [], activeChannels: [] };
+  XCFParser.parse(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.length), doc);
+  const layer = new Layer();
+  layer.rect = new Rect(0, 0, 2, 1);
+  layer.buffer = Uint8Array.from([30, 40, 50, 255, 60, 70, 80, 255]);
+  doc.layers = [layer];
+  doc.selectedLayerIndices = [0];
+  doc.activeChannels = [1];
+  doc.pathViewport = { channelVisibility: [1, 1, 1] };
+  const history = [];
+  doc.pushHistory = entry => history.push(entry);
+  doc.markDirty = () => {};
+  const first = doc.extraChannels[0].channel.slice();
+  const selection = doc.selectionMask.channel.slice();
+  const artwork = layer.buffer.slice();
+  const source = doc.extraChannels[1].channel.slice();
+  const pixels = () => Array.from(doc.extraChannels[1].channel.subarray(0, 2));
+  const tool = new PaintTool();
+
+  tool.handleInput({ actionKind: "fromAction", scriptActionPayload: {
+    uf: "fill", actionDescriptor: { Usng: { v: { FlCn: "Blck" } }, Opct: { v: { val: 100 } } },
+  } }, null, doc, null, {});
+  assert.deepEqual(pixels(), [18, 158]);
+  const filled = doc.extraChannels[1].channel.slice();
+  tool.handleInput({ actionKind: "fromAction", scriptActionPayload: { uf: "delete" } },
+    null, doc, null, { bgColor: 0xffffff });
+  assert.deepEqual(pixels(), [136, 182]);
+  const cleared = doc.extraChannels[1].channel.slice();
+  assert.equal(history.length, 2);
+  assert.deepEqual(history.map(entry => entry.data[0].layerIndex), [-2, -2]);
+  assert.deepEqual(doc.extraChannels[0].channel, first);
+  assert.deepEqual(doc.selectionMask.channel, selection);
+  assert.deepEqual(layer.buffer, artwork);
+
+  doc.activeChannels = [];
+  tool.undo(history[1].data, doc);
+  assert.deepEqual(doc.extraChannels[1].channel, filled);
+  tool.undo(history[0].data, doc);
+  assert.deepEqual(doc.extraChannels[1].channel, source);
+  tool.redo(history[0].data, doc);
+  assert.deepEqual(doc.extraChannels[1].channel, filled);
+  tool.redo(history[1].data, doc);
+  assert.deepEqual(doc.extraChannels[1].channel, cleared);
+  assert.deepEqual(doc.extraChannels[0].channel, first);
+  assert.deepEqual(doc.selectionMask.channel, selection);
+  assert.deepEqual(layer.buffer, artwork);
+});
