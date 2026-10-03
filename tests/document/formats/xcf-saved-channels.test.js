@@ -60,6 +60,52 @@ it("duplicates a selected imported saved channel without changing the selection 
   assert.deepEqual(doc.selectionMask.channel, selection);
 });
 
+it("saves an imported selection beside saved channels and restores it through history", () => {
+  const bytes = fixture();
+  const doc = { layers: [], extraChannels: [], activeChannels: [] };
+  XCFParser.parse(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.length), doc);
+  const layer = new Layer();
+  layer.rect = new Rect(0, 0, 2, 1);
+  layer.buffer = Uint8Array.from([30, 40, 50, 255, 60, 70, 80, 255]);
+  doc.layers = [layer];
+  doc.selectedLayerIndices = [0];
+  doc.pathViewport = { channelVisibility: [1, 1, 1] };
+  doc.getQuickMask = () => null;
+  doc.markDirty = () => {};
+  doc.pushHistory = entry => { doc.historyEntry = entry; };
+  const importedChannels = doc.extraChannels.slice();
+  const selection = doc.selectionMask;
+  const artwork = layer.buffer.slice();
+  const tracker = new TrackerRegistry.LayerEffectsTracker();
+
+  tracker.handleInput({
+    actionKind: Layer.extraChannelOp,
+    operation: "fromAction",
+    recordedActionPayload: {
+      uf: "duplicate",
+      actionDescriptor: { null: { v: [{ v: { classID: "Chnl", keyID: "fsel" } }] } },
+    },
+  }, {}, doc, { isPressed: () => false }, {});
+  assert.equal(doc.extraChannels.length, 3);
+  assert.deepEqual(doc.extraChannels.slice(0, 2), importedChannels);
+  assert.equal(doc.extraChannels[2].name, "Alpha 3");
+  assert.deepEqual(Array.from(doc.extraChannels[2].channel.subarray(0, 2)), [255, 0]);
+  assert.notEqual(doc.extraChannels[2].channel, selection.channel);
+  assert.equal(doc.selectionMask, selection);
+  assert.deepEqual(doc.activeChannels, []);
+  assert.deepEqual(layer.buffer, artwork);
+
+  tracker.undo(doc.historyEntry.data, doc);
+  assert.deepEqual(doc.extraChannels, importedChannels);
+  assert.equal(doc.selectionMask, selection);
+  tracker.redo(doc.historyEntry.data, doc);
+  assert.equal(doc.extraChannels.length, 3);
+  assert.deepEqual(Array.from(doc.extraChannels[2].channel.subarray(0, 2)), [255, 0]);
+  assert.deepEqual(doc.extraChannels.slice(0, 2), importedChannels);
+  assert.equal(doc.selectionMask, selection);
+  assert.deepEqual(layer.buffer, artwork);
+});
+
 it("deletes only the selected imported saved channel and restores it through history", () => {
   const bytes = fixture();
   const doc = { layers: [], extraChannels: [], activeChannels: [] };
