@@ -54,9 +54,17 @@ it("duplicates a selected imported saved channel without changing the selection 
   tracker.undo(doc.historyEntry.data, doc);
   assert.equal(doc.extraChannels.length, 2);
   assert.deepEqual(doc.selectionMask.channel, selection);
+  assert.equal(loadChannelAsSelectionMask(doc, -7), undefined);
   tracker.redo(doc.historyEntry.data, doc);
   assert.equal(doc.extraChannels.length, 3);
   assert.deepEqual(doc.extraChannels[2].channel, source.channel);
+  assert.deepEqual(doc.selectionMask.channel, selection);
+  const loaded = loadChannelAsSelectionMask(doc, -7);
+  assert.deepEqual([loaded.rect.x, loaded.rect.y, loaded.rect.width, loaded.rect.height], [0, 0, 2, 1]);
+  assert.deepEqual(Array.from(loaded.channel.subarray(0, 2)), [91, 222]);
+  assert.deepEqual(loaded.channel, loadChannelAsSelectionMask(doc, -6).channel);
+  assert.notEqual(loaded.channel, doc.extraChannels[2].channel);
+  assert.deepEqual(doc.extraChannels[1].channel, source.channel);
   assert.deepEqual(doc.selectionMask.channel, selection);
 });
 
