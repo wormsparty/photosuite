@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { after, before, it } from "node:test";
 import { installBrowserGlobals } from "../../helpers/stub-browser-globals.js";
 
-let XCFParser, loadChannelAsSelectionMask, Layer, PaintTool, Rect, restore;
+let XCFParser, loadChannelAsSelectionMask, Layer, PaintTool, Rect, TrackerRegistry, restore;
 before(async () => {
   restore = installBrowserGlobals();
   await import("../../../src/engine/layer-system.js");
@@ -11,9 +11,51 @@ before(async () => {
   ({ Layer } = await import("../../../src/document/model/layer.js"));
   ({ PaintTool } = await import("../../../src/document/tools/paint-tools.js"));
   ({ Rect } = await import("../../../src/core/math/rect.js"));
-  const { TrackerRegistry } = await import("../../../src/features/trackers/tracker-registry.js");
+  ({ TrackerRegistry } = await import("../../../src/features/trackers/tracker-registry.js"));
   const { registerTrackers } = await import("../../../src/features/trackers/register-trackers.js");
   registerTrackers(TrackerRegistry);
+});
+
+it("duplicates a selected imported saved channel without changing the selection or source", () => {
+  const bytes = fixture();
+  const doc = { layers: [], extraChannels: [], activeChannels: [] };
+  XCFParser.parse(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.length), doc);
+  doc.activeChannels = [1];
+  doc.selectedLayerIndices = [];
+  doc.pathViewport = { channelVisibility: [1, 1, 1] };
+  doc.getQuickMask = () => null;
+  doc.markDirty = () => {};
+  doc.pushHistory = entry => { doc.historyEntry = entry; };
+  const selection = doc.selectionMask.channel.slice();
+  const first = doc.extraChannels[0].channel.slice();
+  const source = doc.extraChannels[1];
+  source.displayOpacity = 63;
+  source.density = 192;
+  const tracker = new TrackerRegistry.LayerEffectsTracker();
+  tracker.handleInput({
+    actionKind: Layer.extraChannelOp,
+    operation: "fromAction",
+    recordedActionPayload: {
+      uf: "duplicate",
+      actionDescriptor: { null: { v: [{ v: { keyID: "Chnl" } }] } },
+    },
+  }, {}, doc, { isPressed: () => false }, {});
+  assert.equal(doc.extraChannels.length, 3);
+  assert.equal(doc.extraChannels[2].name, "Alpha 3");
+  assert.notEqual(doc.extraChannels[2], source);
+  assert.notEqual(doc.extraChannels[2].channel, source.channel);
+  assert.deepEqual(doc.extraChannels[2].channel, source.channel);
+  assert.equal(doc.extraChannels[2].displayOpacity, 63);
+  assert.equal(doc.extraChannels[2].density, 192);
+  assert.deepEqual(doc.extraChannels[0].channel, first);
+  assert.deepEqual(doc.selectionMask.channel, selection);
+  tracker.undo(doc.historyEntry.data, doc);
+  assert.equal(doc.extraChannels.length, 2);
+  assert.deepEqual(doc.selectionMask.channel, selection);
+  tracker.redo(doc.historyEntry.data, doc);
+  assert.equal(doc.extraChannels.length, 3);
+  assert.deepEqual(doc.extraChannels[2].channel, source.channel);
+  assert.deepEqual(doc.selectionMask.channel, selection);
 });
 after(() => restore?.());
 

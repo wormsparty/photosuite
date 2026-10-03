@@ -673,7 +673,7 @@ function applyExtraChannelFromAction(event, doc, extraChannelsAfter, activeChann
     let fromSelection = false;
     const invertChannel = false;
         if (doc.getQuickMask()) insertChannelIndex--;
-    const newChannelMask = new Mask();
+    let newChannelMask = new Mask();
         newChannelMask.name = "Alpha " + (insertChannelIndex + 1);
         if (actionKind == "make") {
           if (actionDescriptor.Nw == null || actionDescriptor.Nw.v == null) {
@@ -711,12 +711,15 @@ function applyExtraChannelFromAction(event, doc, extraChannelsAfter, activeChann
           if (!Number.isInteger(sourceChannelIndex) || sourceChannelIndex < 0 || sourceChannelIndex >= extraChannelsAfter.length) {
             return { selectionAfter: selectionMaskAfter, abort: true };
           }
+          newChannelMask = extraChannelsAfter[sourceChannelIndex].clone();
+          newChannelMask.name = "Alpha " + (insertChannelIndex + 1);
+        } else {
+          selectionAfter = SelectTool.loadChannelAsSelectionMask(doc, loadChannelIndex);
+          if (selectionAfter == null) return { selectionAfter: selectionMaskAfter, abort: true };
+          newChannelMask.color = 0;
+          newChannelMask.rect = selectionAfter.rect;
+          newChannelMask.channel = selectionAfter.channel;
         }
-        selectionAfter = SelectTool.loadChannelAsSelectionMask(doc, loadChannelIndex);
-        if (selectionAfter == null) return { selectionAfter: selectionMaskAfter, abort: true };
-            newChannelMask.color = 0;
-        newChannelMask.rect = selectionAfter.rect;
-        newChannelMask.channel = selectionAfter.channel;
           }
         }
         if (fromSelection) {
