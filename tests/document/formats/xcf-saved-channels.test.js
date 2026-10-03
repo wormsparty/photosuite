@@ -154,6 +154,48 @@ it("deletes only the selected imported saved channel and restores it through his
   assert.deepEqual(doc.selectionMask.channel, selection);
   assert.deepEqual(layer.buffer, artwork);
 });
+
+it("deletes both selected imported saved channels and restores their order through history", () => {
+  const bytes = fixture();
+  const doc = { layers: [], extraChannels: [], activeChannels: [] };
+  XCFParser.parse(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.length), doc);
+  const layer = new Layer();
+  layer.rect = new Rect(0, 0, 2, 1);
+  layer.buffer = Uint8Array.from([30, 40, 50, 255, 60, 70, 80, 255]);
+  doc.layers = [layer];
+  doc.selectedLayerIndices = [0];
+  doc.activeChannels = [0, 1];
+  doc.pathViewport = { channelVisibility: [1, 1, 1] };
+  doc.markDirty = () => {};
+  doc.pushHistory = entry => { doc.historyEntry = entry; };
+  const channels = doc.extraChannels.slice();
+  const channelPixels = channels.map(channel => channel.channel.slice());
+  const selection = doc.selectionMask.channel.slice();
+  const artwork = layer.buffer.slice();
+  const tracker = new TrackerRegistry.LayerEffectsTracker();
+
+  tracker.handleInput({
+    actionKind: Layer.extraChannelOp,
+    operation: "fromAction",
+    recordedActionPayload: { uf: "delete", actionDescriptor: {} },
+  }, {}, doc, { isPressed: () => false }, {});
+  assert.deepEqual(doc.extraChannels, []);
+  assert.deepEqual(doc.activeChannels, []);
+  assert.deepEqual(doc.historyEntry.data.activeChannelsBefore, [0, 1]);
+  assert.deepEqual(doc.selectionMask.channel, selection);
+  assert.deepEqual(layer.buffer, artwork);
+
+  tracker.undo(doc.historyEntry.data, doc);
+  assert.deepEqual(doc.extraChannels, channels);
+  assert.deepEqual(doc.extraChannels.map(channel => channel.name), ["Saved alpha", "Saved detail"]);
+  assert.deepEqual(doc.extraChannels.map(channel => channel.channel), channelPixels);
+  assert.deepEqual(doc.activeChannels, [0, 1]);
+  tracker.redo(doc.historyEntry.data, doc);
+  assert.deepEqual(doc.extraChannels, []);
+  assert.deepEqual(doc.activeChannels, []);
+  assert.deepEqual(doc.selectionMask.channel, selection);
+  assert.deepEqual(layer.buffer, artwork);
+});
 after(() => restore?.());
 
 const u32 = value => { const bytes = Buffer.alloc(4); bytes.writeUInt32BE(value); return bytes; };
