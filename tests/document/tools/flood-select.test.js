@@ -64,6 +64,25 @@ describe("document/tools/flood-select.js", () => {
     assert.equal(sampleSelectionAtPoint(doc, new Point(0, 2), [0, false, true]), null);
   });
 
+  it("samples transparent pixels outside the active layer instead of another visible layer", () => {
+    const activeBuffer = new Uint8ClampedArray([0, 0, 255, 255]);
+    const upperBuffer = new Uint8ClampedArray(3 * 4);
+    for (let x = 0; x < 3; x++) upperBuffer.set([0, 0, 255, 255], x * 4);
+    const doc = {
+      width: 3,
+      height: 1,
+      selectedLayerIndices: [0],
+      layers: [
+        { pixelContent: 0, add: { lsct: null }, rect: new Rect(1, 0, 1, 1), buffer: activeBuffer },
+        { pixelContent: 0, add: { lsct: null }, rect: new Rect(0, 0, 3, 1), buffer: upperBuffer },
+      ],
+    };
+
+    const selection = sampleSelectionAtPoint(doc, new Point(0, 0), [0, false, false]);
+    assert.deepEqual(selection.rect, new Rect(0, 0, 3, 1));
+    assert.deepEqual([...selection.channel.slice(0, selection.rect.area())], [255, 0, 255]);
+  });
+
   it("applies tolerance inclusively and fades only the next band when anti-aliasing", () => {
     const buffer = new Uint8ClampedArray(4 * 4);
     for (let x = 0; x < 4; x++) {
