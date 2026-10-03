@@ -83,6 +83,25 @@ describe("document/tools/flood-select.js", () => {
     assert.deepEqual([...selection.channel.slice(0, selection.rect.area())], [255, 0, 255]);
   });
 
+  it("keeps top-right and bottom-left edge samples on their own pixels", () => {
+    const width = 32;
+    const height = 24;
+    const buffer = new Uint8ClampedArray(width * height * 4);
+    buffer.set([255, 0, 0, 255], (width - 1) * 4);
+    buffer.set([0, 0, 255, 255], (height - 1) * width * 4);
+    const doc = {
+      width,
+      height,
+      selectedLayerIndices: [0],
+      layers: [{ pixelContent: 0, add: { lsct: null }, rect: new Rect(0, 0, width, height), buffer }],
+    };
+    for (const point of [new Point(width - 1, 0), new Point(0, height - 1)]) {
+      const selection = sampleSelectionAtPoint(doc, point, [0, false, true]);
+      assert.deepEqual(selection.rect, new Rect(point.x, point.y, 1, 1));
+      assert.equal(selection.channel[0], 255);
+    }
+  });
+
   it("applies tolerance inclusively and fades only the next band when anti-aliasing", () => {
     const buffer = new Uint8ClampedArray(4 * 4);
     for (let x = 0; x < 4; x++) {
