@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { after, before, it } from "node:test";
 import { installBrowserGlobals } from "../../helpers/stub-browser-globals.js";
 
-let XCFParser, loadChannelAsSelectionMask, Layer, PaintTool, Rect, TrackerRegistry, restore;
+let XCFParser, loadChannelAsSelectionMask, Layer, PaintTool, Rect, TrackerRegistry, ChannelsPanel, installPluginToolOverlays, restore;
 before(async () => {
   restore = installBrowserGlobals();
   await import("../../../src/engine/layer-system.js");
@@ -12,6 +12,8 @@ before(async () => {
   ({ PaintTool } = await import("../../../src/document/tools/paint-tools.js"));
   ({ Rect } = await import("../../../src/core/math/rect.js"));
   ({ TrackerRegistry } = await import("../../../src/features/trackers/tracker-registry.js"));
+  ({ ChannelsPanel } = await import("../../../src/ui/panels/channels-panel.js"));
+  ({ installPluginToolOverlays } = await import("../../../src/ui/panels/plugin-tool-overlays.js"));
   const { registerTrackers } = await import("../../../src/features/trackers/register-trackers.js");
   registerTrackers(TrackerRegistry);
 });
@@ -106,6 +108,39 @@ it("imports saved XCF channel visibility for both shown and hidden channels", ()
   assert.deepEqual(doc.extraChannels.map(channel => channel.active), [true, false]);
   assert.deepEqual(Array.from(doc.extraChannels[0].channel.subarray(0, 2)), [89, 193]);
   assert.deepEqual(Array.from(doc.extraChannels[1].channel.subarray(0, 2)), [37, 211]);
+});
+
+it("shows only visible imported saved channels and updates overlays after eye clicks", () => {
+  const bytes = fixture([1, 0]);
+  const doc = { layers: [], extraChannels: [], activeChannels: [], selectedLayerIndices: [] };
+  XCFParser.parse(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.length), doc);
+  doc.pathViewport = { channelVisibility: [1, 1, 1] };
+
+  class OverlayPanel {}
+  installPluginToolOverlays(OverlayPanel);
+  const overlay = new OverlayPanel();
+  const drawn = [];
+  overlay.drawChannelMaskOverlay = (channel, view, mode) => drawn.push([channel.name, mode]);
+  overlay.drawGuideAndOverlayGraphics = () => false;
+  overlay.mainCanvasCtx = {};
+  overlay.appData = { extras: false };
+  const channels = new ChannelsPanel();
+  channels.activeDoc = doc;
+
+  assert.equal(overlay.drawActiveMaskOverlays(doc), true);
+  assert.deepEqual(drawn, [["Saved alpha", 1]]);
+  channels.onLayerClick({ data: { idx: -5, isVisibilityEyeClick: true } });
+  channels.onLayerClick({ data: { idx: -6, isVisibilityEyeClick: true } });
+  drawn.length = 0;
+  assert.equal(overlay.drawActiveMaskOverlays(doc), true);
+  assert.deepEqual(drawn, [["Saved detail", 1]]);
+  doc.pathViewport.channelVisibility = [0, 0, 0];
+  drawn.length = 0;
+  assert.equal(overlay.drawActiveMaskOverlays(doc), true);
+  assert.deepEqual(drawn, [["Saved detail", 2]]);
+  assert.deepEqual(doc.activeChannels, []);
+  assert.equal(doc.dirty, true);
+  assert.equal(doc.panelsDirty, true);
 });
 
 it("imports two distinct named XCF saved channels separately from selection and loads each pixel plane", () => {
