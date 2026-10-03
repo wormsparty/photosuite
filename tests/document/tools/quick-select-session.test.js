@@ -224,6 +224,38 @@ describe("document/tools/quick-select-session.js", () => {
     assert.equal(session.selectionMaskBuffer[90 * WIDTH + 150], 0);
   });
 
+  it("preserves feathered coverage when a later stroke adds another object", () => {
+    const session = createQuickSelectSession(twoObjectDoc());
+    dab(session, 150, 90, 5, 255);
+    recomputeQuickSelectSelection(session);
+    assert.equal(session.selectionMaskBuffer[90 * WIDTH + 150], 255);
+    const emitted = { rect: session.rect, channel: session.selectionMaskBuffer.slice(0) };
+    session.emittedSelection = emitted;
+    assert.equal(hasDocumentSelectionDiverged(session, emitted), false);
+
+    // A selection modified by Feather has a new mask identity and fractional
+    // boundary pixels. The next Quick Select stroke must adopt those bytes.
+    const feathered = {
+      rect: new Rect(0, 0, WIDTH, HEIGHT),
+      channel: new Uint8Array(WIDTH * HEIGHT),
+    };
+    feathered.channel[145 * WIDTH + 10] = 64;
+    feathered.channel[146 * WIDTH + 10] = 128;
+    feathered.channel[147 * WIDTH + 10] = 224;
+    assert.equal(hasDocumentSelectionDiverged(session, feathered), true);
+    adoptDocumentSelection(session, feathered);
+    assert.equal(session.selectionMaskBuffer[90 * WIDTH + 150], 0);
+
+    dab(session, 50, 55, 5, 255);
+    recomputeQuickSelectSelection(session);
+    assert.equal(session.selectionMaskBuffer[55 * WIDTH + 50], 255);
+    assert.deepEqual(
+      [145, 146, 147].map((y) => session.selectionMaskBuffer[y * WIDTH + 10]),
+      [64, 128, 224],
+    );
+    assert.equal(session.selectionMaskBuffer[90 * WIDTH + 150], 0);
+  });
+
   // A background scribble has to reach into an adopted selection too, or a
   // selection made elsewhere could never be painted back out.
   it("subtracts from an adopted selection", () => {
