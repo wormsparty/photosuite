@@ -148,6 +148,61 @@ describe("document/tools/selection-tools.js", () => {
     assert.ok(at(3, 8) > 0 && at(3, 8) < 255);
   });
 
+  it("commits a toolbar-feathered ellipse through its path with undoable soft edges", () => {
+    const tool = new EllipseSelectTool();
+    const events = [];
+    const dispatcher = { dispatch(event) { events.push(event); } };
+    const appData = { extras: true, prefs: { showSelectionEdges: true } };
+    const history = [];
+    const doc = {
+      width: 16, height: 16, selectionMask: null,
+      pushHistory(entry) { history.push(entry); },
+    };
+    // The Node browser stub has no canvas rasterizer. Supply only the path's
+    // hard mask; the descriptor, feathering, and history paths remain real.
+    let receivedPath;
+    tool.bezierPathToSelectionMask = (path) => {
+      receivedPath = path;
+      const channel = new Uint8Array(8 * 8);
+      for (let y = 0; y < 8; y++) {
+        for (let x = 0; x < 8; x++) {
+          if ((x - 3.5) ** 2 + (y - 3.5) ** 2 < 13) channel[y * 8 + x] = 255;
+        }
+      }
+      return { rect: new Rect(4, 4, 8, 8), channel };
+    };
+
+    tool.syncToolbarWidget([0, 1, [16, true, true]], null, dispatcher);
+    tool.appDispatcher = dispatcher;
+    tool.startPos = new Point(4, 4);
+    tool.cursorPos = new Point(12, 12);
+    tool.exceededDragThreshold = true;
+    tool.finish(doc, appData, null, null);
+
+    const gesture = events.find((event) => event.type === EventType.historyGrouped);
+    assert.ok(gesture);
+    assert.equal(gesture.data.actionDescriptor.T.v.classID, "Elps");
+    assert.equal(gesture.data.actionDescriptor.Fthr.v.val, 1);
+    tool.handleInput({ actionKind: "fromAction", scriptActionPayload: gesture.data }, dispatcher, doc, null, appData);
+
+    assert.equal(receivedPath.commands[0], "M");
+    assert.equal(receivedPath.commands.filter((command) => command === "C").length, 4);
+    assert.equal(history.length, 1);
+    assert.equal(history[0].name, "tools.ellipseSelect");
+    const selection = doc.selectionMask;
+    const at = (x, y) => selection.channel[(y - selection.rect.y) * selection.rect.width + x - selection.rect.x];
+    assert.ok(selection.rect.x < 4);
+    assert.ok(at(3, 8) > 0 && at(3, 8) < 255);
+    assert.equal(at(8, 8), 255);
+    assert.ok(at(4, 4) < at(4, 8));
+
+    tool.undo(history[0].data, doc);
+    assert.equal(doc.selectionMask, null);
+    tool.redo(history[0].data, doc);
+    assert.equal(doc.selectionMask, selection);
+    assert.ok(at(3, 8) > 0 && at(3, 8) < 255);
+  });
+
   it("EllipseSelectTool.ellipseToBezierPath returns closed path overlay", () => {
     chainToolPrototypes();
     const path = EllipseSelectTool.ellipseToBezierPath(new Rect(0, 0, 100, 50));
