@@ -625,7 +625,7 @@ function resolveMaskViewModeFromChannelVisibility(maskOrLoader, currentDoc) {
 // ---------------------------------------------------------------------------
 
 function handleShiftOnlyShortcuts(controller, ctx) {
-  const { keyboard, currentDoc, hasSelection } = ctx;
+  const { keyboard, currentDoc, hasSelection, keyPhase } = ctx;
   const documentActionEvent = new AppEvent(EventType.documentAction);
   const uiDispatchEvent = new AppEvent(EventType.uiDispatch);
 
@@ -641,7 +641,7 @@ function handleShiftOnlyShortcuts(controller, ctx) {
       dialogRouteId: "fill"
     }
   }
-  if (keyboard.isPressed(KeyboardHandler.F6)) {
+  if (keyPhase == "down" && currentDoc?.selectionMask != null && keyboard.isPressed(KeyboardHandler.F6)) {
     uiDispatchEvent.data = {
       dispatchKind: UiCommand.dispatchAppDialogRouter,
       dialogRouteId: "sel_feather"

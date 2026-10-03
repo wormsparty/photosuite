@@ -100,6 +100,53 @@ describe("ui/shell/app-controller-keyboard.js", () => {
     assert.deepEqual(FakeController.prototype.textInputTagNames, ["input", "textarea", "select"]);
   });
 
+  it("Shift+F6 opens Feather only for a document with a selection", () => {
+    function FakeController() {}
+    applyKeyboardHandlers(FakeController);
+    const controller = new FakeController();
+    const dispatched = [];
+    controller.keyboardHandler = new KeyboardHandler();
+    controller.overlayManager = { getTopPopup() { return null; } };
+    controller.documentView = { getTopDialog() { return null; } };
+    controller.appData = { activeToolId: null };
+    controller.toolRegistry = { entriesById: {}, toolbarShortcutKeys: [] };
+    let currentDoc = null;
+    controller.getCurrentDoc = () => currentDoc;
+    controller.updateTemporaryToolFromModifiers = () => {};
+    controller.isShortcutKeyHeld = () => false;
+    controller.dispatch = (event) => dispatched.push(event);
+    const eventFor = (code, key, shiftKey) => ({
+      code, key, shiftKey, ctrlKey: false, altKey: false, metaKey: false,
+      repeat: false, target: { tagName: "DIV", getAttribute() { return null; } },
+      defaultPrevented: false,
+      preventDefault() { this.defaultPrevented = true; },
+    });
+
+    const bareF6 = eventFor("F6", "F6", false);
+    controller.onDocumentKeyDown(bareF6);
+    assert.equal(bareF6.defaultPrevented, false);
+    assert.equal(dispatched.length, 0);
+
+    controller.keyboardHandler.reset();
+    const shift = eventFor("ShiftLeft", "Shift", true);
+    controller.onDocumentKeyDown(shift);
+    const shiftF6 = eventFor("F6", "F6", true);
+    controller.onDocumentKeyDown(shiftF6);
+    assert.equal(shiftF6.defaultPrevented, true);
+    assert.equal(dispatched.length, 0, "no document");
+
+    currentDoc = { selectedLayerIndices: [], selectionMask: null };
+    controller.onDocumentKeyDown(shiftF6);
+    assert.equal(dispatched.length, 0, "no selection mask");
+
+    currentDoc.selectionMask = { width: 2, height: 2, data: new Uint8Array(4) };
+    controller.onDocumentKeyDown(shiftF6);
+    assert.equal(dispatched.length, 1);
+    assert.equal(dispatched[0].data.dialogRouteId, "sel_feather");
+    controller.onKeyEvent("up");
+    assert.equal(dispatched.length, 1, "key release must not reopen Feather");
+  });
+
   it("Shift+Plus and Shift+Minus cycle a group's blend modes through Pass Through", () => {
     function FakeController() {}
     applyKeyboardHandlers(FakeController);
